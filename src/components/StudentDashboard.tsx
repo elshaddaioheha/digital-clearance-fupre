@@ -44,6 +44,7 @@ interface StudentProfile {
   faculty: string;
   level: string;
   sessionOfGraduation: string;
+  profilePhotoUrl?: string;
   user: {
     name: string;
     email: string;
@@ -73,6 +74,8 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showToast, setShowToast] = useState(true);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
 
@@ -121,6 +124,35 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       setSelectedFile(file);
       setUploadError("");
       await calculateChecksum(file);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/api/students/me/photo", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setProfile(prev => prev ? { ...prev, profilePhotoUrl: data.profilePhotoUrl } : prev);
+      } else {
+        alert(data.error || "Failed to upload photo");
+      }
+    } catch (err) {
+      console.error("Photo upload error:", err);
+      alert("Error uploading photo");
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
@@ -241,7 +273,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       {/* 1. Dual-Tier Header */}
       <header className="fixed top-0 left-0 w-full z-30 shadow-md">
         {/* Tier 1: White logo header banner */}
-        <div className="bg-white h-16 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200">
+        <div className="bg-white h-16 px-4 sm:px-6 flex items-center justify-center sm:justify-between border-b border-slate-200">
           <div className="flex items-center gap-3">
             <img 
               src="/fupre_logo.png" 
@@ -379,35 +411,103 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           </div>
         </div>
 
-        {/* 4. Portal-Style Statistics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-poppins">
-          {/* Card 1: Outstanding Count (Green) */}
-          <div className="bg-[#00A65A] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between min-h-[140px] transform hover:scale-[1.01] transition-transform">
-            <div className="p-6">
-              <span className="block font-bold text-4xl mb-1">{totalUnits - clearedCount}</span>
-              <span className="text-xs font-bold uppercase tracking-wider text-white/80">Outstanding Offices</span>
+        {/* Welcome & Warning Toast (In-flow) */}
+        {showToast && (
+          <div className="bg-[#00a8e8] text-white rounded-xl shadow-md flex max-w-full overflow-hidden animate-in fade-in duration-500 font-poppins">
+            <div className="p-4 sm:p-5 flex gap-3 sm:gap-4 relative w-full">
+              <button 
+                onClick={() => setShowToast(false)} 
+                className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <AlertCircle className="w-6 h-6 text-white shrink-0 mt-0.5" />
+              <div className="pr-8">
+                <h4 className="font-bold text-base sm:text-lg mb-1.5 leading-tight">
+                  Alert!
+                </h4>
+                <p className="text-sm sm:text-base font-semibold leading-relaxed text-white/95">
+                  Welcome to the official FUPRE Digital Student Clearance System (DSCS). <br className="hidden sm:block" />
+                  <span className="text-red-100 uppercase tracking-wider text-xs font-bold">CAUTION:</span> Ensure all documents and information provided are authentic. The ICT Unit performs full verification. Falsification of records will result in severe penalties and immediate denial of clearance.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. Portal-Style Statistics Grid (2x2 on mobile) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 font-poppins mb-2">
+          
+          {/* Square 1: Profile Photo */}
+          <div className="relative rounded-xl border-2 border-slate-200 bg-slate-50 overflow-hidden shadow-md group aspect-square md:aspect-auto md:min-h-[140px] flex items-center justify-center">
+            {profile?.profilePhotoUrl ? (
+              <img src={profile.profilePhotoUrl} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center font-extrabold text-slate-400 text-5xl uppercase">
+                {user.name.charAt(0)}
+              </div>
+            )}
+            
+            <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+              {photoUploading ? (
+                <Loader2 className="w-8 h-8 animate-spin" />
+              ) : (
+                <>
+                  <Upload className="w-8 h-8 mb-1" />
+                  <span className="text-xs font-semibold uppercase tracking-wider">Upload</span>
+                </>
+              )}
+              <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
+            </label>
+          </div>
+
+          {/* Square 2: Outstanding Count (Blue) */}
+          <div className="bg-[#3482B9] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between aspect-square md:aspect-auto md:min-h-[140px] transform hover:scale-[1.01] transition-transform">
+            <div className="p-4 sm:p-6 flex flex-col items-center justify-center flex-1 text-center">
+              <span className="block font-bold text-4xl sm:text-5xl mb-1">{totalUnits - clearedCount}</span>
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white/80">Outstanding<br className="sm:hidden" /> Offices</span>
             </div>
             <div 
-              className="bg-[#008d4c] py-2 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#00733e] transition-colors" 
+              className="bg-[#2a6996] py-2 px-2 sm:px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#1f5073] transition-colors mt-auto" 
               onClick={() => handleScrollToSection("directory")}
             >
               <span>More info</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 hidden sm:block" />
             </div>
           </div>
 
-          {/* Card 2: Cleared Count (Orange) */}
-          <div className="bg-[#F39C12] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between min-h-[140px] transform hover:scale-[1.01] transition-transform">
-            <div className="p-6">
-              <span className="block font-bold text-4xl mb-1">{clearedCount}</span>
-              <span className="text-xs font-bold uppercase tracking-wider text-white/80">Cleared Offices</span>
+          {/* Square 3: Cleared Count (Green) */}
+          <div className="bg-[#00A65A] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between aspect-square md:aspect-auto md:min-h-[140px] transform hover:scale-[1.01] transition-transform">
+            <div className="p-4 sm:p-6 flex flex-col items-center justify-center flex-1 text-center">
+              <span className="block font-bold text-4xl sm:text-5xl mb-1">{clearedCount}</span>
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white/80">Cleared<br className="sm:hidden" /> Offices</span>
             </div>
             <div 
-              className="bg-[#db8b0b] py-2 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#c87f0a] transition-colors" 
+              className="bg-[#008d4c] py-2 px-2 sm:px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#00733e] transition-colors mt-auto" 
               onClick={() => handleScrollToSection("directory")}
             >
               <span>More info</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 hidden sm:block" />
+            </div>
+          </div>
+
+          {/* Square 4: Progress / Status (Orange/Yellow) */}
+          <div className={`${isFullyCleared ? "bg-[#db8b0b]" : "bg-[#F39C12]"} text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between aspect-square md:aspect-auto md:min-h-[140px] transform hover:scale-[1.01] transition-transform`}>
+            <div className="p-4 sm:p-6 flex flex-col items-center justify-center flex-1 text-center">
+              {isFullyCleared ? (
+                <>
+                  <span className="block font-bold text-4xl sm:text-5xl mb-1">100%</span>
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white/80">Complete</span>
+                </>
+              ) : (
+                <>
+                  <span className="block font-bold text-4xl sm:text-5xl mb-1">{Math.round((clearedCount / Math.max(totalUnits, 1)) * 100)}%</span>
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white/80">Progress</span>
+                </>
+              )}
+            </div>
+            <div className={`${isFullyCleared ? "bg-[#c87f0a] hover:bg-[#b06f08]" : "bg-[#db8b0b]"} py-2 px-2 sm:px-4 text-center text-[10px] sm:text-xs font-semibold text-white/90 flex items-center justify-center gap-1.5 mt-auto transition-colors`}>
+              <span>{isFullyCleared ? "Finished" : "In Progress"}</span>
             </div>
           </div>
         </div>
@@ -457,13 +557,12 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                 </div>
               </div>
 
-              {/* Responsive Scrollable Table */}
-              <div className="overflow-x-auto rounded-lg border border-slate-100">
+              {/* Desktop Table View */}
+              <div className="hidden sm:block overflow-x-auto rounded-lg border border-slate-100">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-400 font-poppins">
                       <th className="py-3 px-4">Clearing Office</th>
-                      <th className="py-3 px-4">Description</th>
                       <th className="py-3 px-4 text-center">Status</th>
                       <th className="py-3 px-4 text-center">Action</th>
                     </tr>
@@ -479,9 +578,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                           <tr key={req.id} className="hover:bg-slate-50/55 transition-all">
                             <td className="py-4 px-4 font-semibold text-sm">
                               {req.clearingUnit.name}
-                            </td>
-                            <td className="py-4 px-4 text-slate-500 max-w-[200px] truncate" title={req.clearingUnit.description}>
-                              {req.clearingUnit.description}
                             </td>
                             <td className="py-4 px-4 text-center">
                               {isLocked ? (
@@ -526,13 +622,84 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                       })
                     ) : (
                       <tr>
-                        <td colSpan={4} className="py-12 px-4 text-center text-slate-400">
+                        <td colSpan={3} className="py-12 px-4 text-center text-slate-400">
                           No clearing requirements found matching filters.
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="block sm:hidden space-y-4 font-poppins">
+                {filteredRequests.length > 0 ? (
+                  filteredRequests.map((req) => {
+                    const style = getStatusStyle(req.status);
+                    const unlocked = isRequestUnlocked(req);
+                    const isLocked = (req.status === "NOT_SUBMITTED" || req.status === "REJECTED") && !unlocked;
+                    
+                    return (
+                      <div key={req.id} className="bg-white border border-slate-100 rounded-xl shadow-sm p-4 flex flex-col gap-4">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <div className="w-7 h-7 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+                              {req.clearingUnit.sortOrder}
+                            </div>
+                            <span className="font-semibold text-sm text-slate-800">{req.clearingUnit.name}</span>
+                          </div>
+                          {isLocked ? (
+                            <span className="inline-block border border-slate-200 bg-slate-100 text-slate-400 rounded-full px-2.5 py-1 text-[10px] font-semibold text-center whitespace-nowrap">
+                              Locked
+                            </span>
+                          ) : (
+                            <span className={`inline-block border rounded-full px-2.5 py-1 text-[10px] font-semibold ${style.bg} ${style.border} ${style.text} text-center whitespace-nowrap`}>
+                              {style.label}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {req.status === "APPROVED" && req.reviewedAt && (
+                          <div className="bg-green-50/50 rounded-lg p-3 border border-green-100 text-xs">
+                            <span className="text-slate-500">Reviewed on: </span>
+                            <span className="font-semibold text-slate-700">{new Date(req.reviewedAt).toLocaleDateString()}</span>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-slate-50 flex justify-end">
+                          {req.status === "NOT_SUBMITTED" || req.status === "REJECTED" ? (
+                            unlocked ? (
+                              <button
+                                onClick={() => setUploadingUnit(req)}
+                                className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] rounded-xl px-4 py-2.5 transition-all shadow-sm cursor-pointer"
+                              >
+                                <Upload className="w-4 h-4" /> Submit Request
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 transition-all cursor-not-allowed"
+                              >
+                                <Lock className="w-4 h-4 text-slate-400" /> Locked
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              onClick={() => setUploadingUnit(req)}
+                              className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl px-4 py-2.5 transition-all cursor-pointer"
+                            >
+                              View Details
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 text-center text-slate-400 text-sm">
+                    No clearing requirements found matching filters.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -559,11 +726,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
             
             {/* Student Profile Card (Blue top border) */}
             <div className="border-t-4 border-[#3482B9] bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col items-center justify-center text-center font-poppins">
-              <div className="w-24 h-24 rounded-lg border-2 border-slate-200 bg-slate-50 overflow-hidden mb-4 flex items-center justify-center relative shadow-inner">
-                <div className="w-full h-full bg-slate-100 flex items-center justify-center font-extrabold text-slate-400 text-3xl uppercase">
-                  {user.name.charAt(0)}
-                </div>
-              </div>
               <h3 className="font-bold text-slate-800 text-base mb-1">{user.name}</h3>
               <div className="px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-600 mb-4 select-all">
                 {profile?.matricNumber || "Student"}
@@ -625,6 +787,17 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                 Clearance Submission Portal
               </p>
             </div>
+
+            {uploadingUnit.clearingUnit.description && (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                <span className="block text-xs font-bold text-[#3482B9] uppercase tracking-wider mb-1">
+                  Required Documents
+                </span>
+                <p className="text-xs text-slate-700 font-poppins whitespace-pre-wrap">
+                  {uploadingUnit.clearingUnit.description}
+                </p>
+              </div>
+            )}
 
             {uploadingUnit.status === "REJECTED" && uploadingUnit.rejectionNote && (
               <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold">

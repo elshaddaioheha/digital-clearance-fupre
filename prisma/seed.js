@@ -34,16 +34,56 @@ async function main() {
 
   // 2. Define standard FUPRE Clearing Units in Sequential Order
   const unitsData = [
-    { name: "Head of Department", sortOrder: 1, description: "Verifies final-year project submission, department book returns, and course results." },
-    { name: "College Office", sortOrder: 2, description: "College of Science/Technology/Engineering clearance verification." },
-    { name: "Admissions Office", sortOrder: 3, description: "Verifies student credentials against physical admission file." },
-    { name: "Bursary Department", sortOrder: 4, description: "Verifies complete tuition payment, hostel fees, and school dues." },
-    { name: "University Library", sortOrder: 5, description: "Verifies returned library books, fine clearances, and cards surrender." },
-    { name: "Sports Council", sortOrder: 6, description: "Verifies sports equipment return and athletic clearances." },
-    { name: "University Health Centre", sortOrder: 7, description: "Verifies medical files, student health records, and clinic clearances." },
-    { name: "Security Department", sortOrder: 8, description: "Verifies ID card validation and security clearance registry check." },
-    { name: "Student Affairs", sortOrder: 9, description: "Verifies hostel room vacation, code of conduct, and student body dues." },
-    { name: "Exams and Records / Alumni", sortOrder: 10, description: "Verifies academic records, transcript audit, and alumni registration." }
+    { 
+      name: "Head of Department", 
+      sortOrder: 1, 
+      description: "Digitized copy of the 100L Departmental Registration File (including Personal Data Form).\nScanned copies of all sessions (100L - 400L) Online Course Registration Forms.\nEvidence of payment for NACOSS (Computing Students) Annual Dues.\nEvidence of payment for mandatory departmental materials (e.g., Computer Science Handbooks/Textbooks)." 
+    },
+    { 
+      name: "College", 
+      sortOrder: 2, 
+      description: "Digitized copy of the 100L College of Science Registration File.\nScanned copies of all Sessional Academic Results (100L - 400L).\nEvidence of payment for NASS (Science Students) Annual Dues.\nScanned Local Government of Origin Identification and Birth Certificate." 
+    },
+    { 
+      name: "Admissions Office", 
+      sortOrder: 3, 
+      description: "Digitized copy of the official \"Clearance / Authority to Pay\" slip (stamped and signed by the Registrar/Admissions Office during initial 100L/200L registration)." 
+    },
+    { 
+      name: "Bursary", 
+      sortOrder: 4, 
+      description: "Comprehensive Remita payment receipts for University Tuition Fees (100L - 400L)." 
+    },
+    { 
+      name: "University Library", 
+      sortOrder: 5, 
+      description: "Scanned image of the FUPRE University Library Registration Card.\nDigital Library No-Debt / Clearance Slip.\nEvidence of Final Year Project hardcopy submission (Library stamped receipt)." 
+    },
+    { 
+      name: "Sports Division", 
+      sortOrder: 6, 
+      description: "Scanned payment receipts for FUPRE Sports Levies and Dues." 
+    },
+    { 
+      name: "University Health Centre", 
+      sortOrder: 7, 
+      description: "Scanned image of the FUPRE Medical ID Card.\nDigitized copy of the initial 100L Certificate of Medical Fitness." 
+    },
+    { 
+      name: "Security Department", 
+      sortOrder: 8, 
+      description: "Scanned payment receipts for University Security Levies.\nDigitized copy of a Sworn Court Affidavit confirming Good Conduct and Non-Membership of Secret Cults." 
+    },
+    { 
+      name: "Student Affairs", 
+      sortOrder: 9, 
+      description: "Scanned payment receipts for Student Affairs fees and SUG (Student Union Government) Dues (100L - 400L).\nScanned payment receipt for the official University Convocation Fee.\nHostel Clearance Slip (evidence of vacating university accommodation in good condition)." 
+    },
+    { 
+      name: "Exams and Records Review", 
+      sortOrder: 10, 
+      description: "Approved Statement of Final Degree Results.\nFinal verification of original JAMB and FUPRE Admission Letters." 
+    }
   ];
 
   const units = {};
@@ -97,7 +137,7 @@ async function main() {
       name: "College Officer",
       email: "college_staff@fupre.edu.ng",
       password: "collegepassword",
-      unitName: "College Office",
+      unitName: "College",
     },
     {
       name: "Admissions Officer",
@@ -109,7 +149,7 @@ async function main() {
       name: "Bursary Officer",
       email: "bursary_staff@fupre.edu.ng",
       password: "bursarypassword",
-      unitName: "Bursary Department",
+      unitName: "Bursary",
     },
     {
       name: "Library Officer",
@@ -121,7 +161,7 @@ async function main() {
       name: "Sports Officer",
       email: "sports_staff@fupre.edu.ng",
       password: "sportspassword",
-      unitName: "Sports Council",
+      unitName: "Sports Division",
     },
     {
       name: "Health Center Officer",
@@ -145,7 +185,7 @@ async function main() {
       name: "Exams and Records Officer",
       email: "exams_staff@fupre.edu.ng",
       password: "examspassword",
-      unitName: "Exams and Records / Alumni",
+      unitName: "Exams and Records Review",
     },
   ];
 
