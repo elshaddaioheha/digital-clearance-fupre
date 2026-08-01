@@ -76,6 +76,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showToast, setShowToast] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
 
@@ -182,6 +183,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       setUploadingUnit(null);
       setSelectedFile(null);
       setChecksum("");
+      setShowUploadForm(false);
       fetchData();
     } catch (err: any) {
       setUploadError(err.message || "An error occurred during upload");
@@ -399,9 +401,10 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         
         {/* Title & Breadcrumb Block */}
         <div className="flex flex-col gap-2 mt-2">
-          <h2 className="font-poppins font-bold text-xl sm:text-2xl text-slate-800">
+          <h1 className="font-poppins font-bold text-xl sm:text-2xl text-slate-800">
+            <span className="block text-[10px] sm:text-xs text-[#3482B9] uppercase tracking-wider mb-1">DSCS</span>
             Dashboard
-          </h2>
+          </h1>
           
           <div className="bg-[#E2E8F0] px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 flex items-center gap-2 border border-slate-300/40">
             <LayoutDashboard className="w-4 h-4 text-slate-500 shrink-0" />
@@ -773,7 +776,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 transition-all">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 p-8 flex flex-col gap-6 relative">
             <button 
-              onClick={() => { setUploadingUnit(null); setSelectedFile(null); setUploadError(""); }}
+              onClick={() => { setUploadingUnit(null); setSelectedFile(null); setUploadError(""); setShowUploadForm(false); }}
               className="absolute right-6 top-6 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer animate-fade-in"
             >
               <X className="w-6 h-6" />
@@ -788,26 +791,117 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               </p>
             </div>
 
-            {uploadingUnit.clearingUnit.description && (
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                <span className="block text-xs font-bold text-[#3482B9] uppercase tracking-wider mb-1">
-                  Required Documents
-                </span>
-                <p className="text-xs text-slate-700 font-poppins whitespace-pre-wrap">
-                  {uploadingUnit.clearingUnit.description}
-                </p>
-              </div>
-            )}
+            {uploadingUnit.status === "NOT_SUBMITTED" || uploadingUnit.status === "REJECTED" ? (
+              <>
+                {!showUploadForm ? (
+                  <div className="space-y-6 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {uploadingUnit.status === "REJECTED" && uploadingUnit.rejectionNote && (
+                      <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold mb-2">
+                        <span className="block uppercase text-[10px] tracking-wider mb-1 font-bold text-red-800">Rejection Note:</span>
+                        "{uploadingUnit.rejectionNote}"
+                      </div>
+                    )}
+                    {uploadingUnit.clearingUnit.description ? (
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 shadow-inner">
+                        <span className="block text-sm font-bold text-[#3482B9] uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" /> Requirements
+                        </span>
+                        <p className="text-sm text-slate-700 font-poppins whitespace-pre-wrap leading-relaxed">
+                          {uploadingUnit.clearingUnit.description}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-center">
+                        <p className="text-sm text-slate-500 font-poppins">No specific requirements listed.</p>
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={() => setShowUploadForm(true)}
+                      className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] shadow-md transition-all cursor-pointer mt-4"
+                    >
+                      Proceed to Upload <ArrowRight className="w-4 h-4 ml-2" />
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleUploadSubmit} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <button type="button" onClick={() => setShowUploadForm(false)} className="text-[#3482B9] text-xs font-semibold hover:underline flex items-center gap-1 mb-2">
+                      &lt; Back to Requirements
+                    </button>
+                    {uploadError && (
+                      <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 font-semibold">
+                        {uploadError}
+                      </div>
+                    )}
 
-            {uploadingUnit.status === "REJECTED" && uploadingUnit.rejectionNote && (
-              <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold">
-                <span className="block uppercase text-[10px] tracking-wider mb-1 font-bold text-red-800">Rejection Note:</span>
-                "{uploadingUnit.rejectionNote}"
-              </div>
-            )}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                        Select Verification Document
+                      </label>
+                      <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 hover:border-[#3482B9] transition-all cursor-pointer relative group">
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={handleFileChange}
+                          required
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                        <Upload className="w-10 h-10 text-slate-450 group-hover:text-[#3482B9] transition-colors mb-3" />
+                        {selectedFile ? (
+                          <span className="text-xs text-slate-800 font-semibold break-all text-center">
+                            {selectedFile.name}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-xs text-slate-700 font-semibold">
+                              Click to browse file
+                            </span>
+                            <span className="text-[10px] text-slate-400 mt-1">
+                              Accepts PDF, PNG, JPG up to 5MB
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
 
-            {uploadingUnit.status !== "NOT_SUBMITTED" && uploadingUnit.status !== "REJECTED" ? (
+                    {checksum && (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[10px]">
+                        <span className="font-semibold text-slate-400 uppercase">SHA-256 Checksum:</span>
+                        <span className="font-mono text-slate-500 break-all select-all font-semibold max-w-[250px] truncate" title={checksum}>
+                          {checksum}
+                        </span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={uploadLoading || !selectedFile}
+                      className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] focus:outline-none shadow-md shadow-[#3482B9]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {uploadLoading ? (
+                        <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                      ) : (
+                        <>
+                          Upload Document & Submit
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </>
+            ) : (
               <div className="space-y-4">
+                {uploadingUnit.clearingUnit.description && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                    <span className="block text-xs font-bold text-[#3482B9] uppercase tracking-wider mb-1">
+                      Required Documents
+                    </span>
+                    <p className="text-xs text-slate-700 font-poppins whitespace-pre-wrap">
+                      {uploadingUnit.clearingUnit.description}
+                    </p>
+                  </div>
+                )}
+                
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <FileText className="w-8 h-8 text-[#3482B9]" />
@@ -826,67 +920,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                   This unit is locked for review. You will receive a notification if corrections are needed.
                 </p>
               </div>
-            ) : (
-              <form onSubmit={handleUploadSubmit} className="space-y-6">
-                {uploadError && (
-                  <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 font-semibold">
-                    {uploadError}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Select Verification Document
-                  </label>
-                  <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 hover:border-[#3482B9] transition-all cursor-pointer relative group">
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={handleFileChange}
-                      required
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                    <Upload className="w-10 h-10 text-slate-450 group-hover:text-[#3482B9] transition-colors mb-3" />
-                    {selectedFile ? (
-                      <span className="text-xs text-slate-800 font-semibold break-all text-center">
-                        {selectedFile.name}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="text-xs text-slate-700 font-semibold">
-                          Click to browse file
-                        </span>
-                        <span className="text-[10px] text-slate-400 mt-1">
-                          Accepts PDF, PNG, JPG up to 5MB
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {checksum && (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[10px]">
-                    <span className="font-semibold text-slate-400 uppercase">SHA-256 Checksum:</span>
-                    <span className="font-mono text-slate-500 break-all select-all font-semibold max-w-[250px] truncate" title={checksum}>
-                      {checksum}
-                    </span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={uploadLoading || !selectedFile}
-                  className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] focus:outline-none shadow-md shadow-[#3482B9]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {uploadLoading ? (
-                    <Loader2 className="animate-spin h-5 w-5 mr-2" />
-                  ) : (
-                    <>
-                      Upload Document & Submit
-                    </>
-                  )}
-                </button>
-              </form>
             )}
           </div>
         </div>
