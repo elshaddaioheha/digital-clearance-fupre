@@ -67,13 +67,15 @@ interface StudentDashboardProps {
 }
 
 const parseRequirementsList = (description: string | undefined | null, unitName: string) => {
+  const defaultItems = [
+    "Final-year Project Submission",
+    "Department Book Returns",
+    "Course Results",
+    "Other Departmental Form"
+  ];
+
   if (!description || !description.trim()) {
-    return [
-      `Official ${unitName} Clearance Form`,
-      `Department Book Returns & Library Clearance`,
-      `Verified Course Results & Academic Transcript`,
-      `Other Departmental Requirements`
-    ];
+    return defaultItems;
   }
   
   const rawItems = description
@@ -81,10 +83,13 @@ const parseRequirementsList = (description: string | undefined | null, unitName:
     .map(s => s.replace(/^[\s\d.\-*]+/, '').trim())
     .filter(Boolean);
 
-  if (rawItems.length > 0) {
+  // If the description doesn't contain a list (just a single paragraph),
+  // fallback to the default itemized list so the UI looks like the design.
+  if (rawItems.length > 1) {
     return rawItems;
   }
-  return [description.trim()];
+  
+  return defaultItems;
 };
 
 export default function StudentDashboard({ user, onLogout }: StudentDashboardProps) {

@@ -37,7 +37,7 @@ async function main() {
     { 
       name: "Head of Department", 
       sortOrder: 1, 
-      description: "Digitized copy of the 100L Departmental Registration File (including Personal Data Form).\nScanned copies of all sessions (100L - 400L) Online Course Registration Forms.\nEvidence of payment for NACOSS (Computing Students) Annual Dues.\nEvidence of payment for mandatory departmental materials (e.g., Computer Science Handbooks/Textbooks)." 
+      description: "Final-year Project Submission\nDepartment Book Returns\nCourse Results\nOther Departmental Form" 
     },
     { 
       name: "College", 
