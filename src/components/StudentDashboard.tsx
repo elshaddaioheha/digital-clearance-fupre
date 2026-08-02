@@ -15,6 +15,8 @@ import {
   AlertCircle, 
   FileText, 
   FileCheck,
+  FilePlus,
+  FileUp,
   Upload, 
   Download, 
   Loader2,
@@ -815,7 +817,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
             </div>
 
             {uploadingUnit.status === "NOT_SUBMITTED" || uploadingUnit.status === "REJECTED" ? (
-              <form onSubmit={handleUploadSubmit} className="space-y-5">
+              <form onSubmit={handleUploadSubmit} className="space-y-6">
                 {uploadingUnit.status === "REJECTED" && uploadingUnit.rejectionNote && (
                   <div className="p-4 bg-red-50/90 border border-red-200 text-red-700 rounded-2xl text-xs font-medium shadow-sm">
                     <span className="block uppercase text-[10px] tracking-wider mb-1 font-bold text-red-800">Rejection Note:</span>
@@ -825,25 +827,25 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
 
                 {/* Requirements Header + Itemized List Card */}
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileCheck className="w-4 h-4 text-slate-700" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 font-poppins">
+                  <div className="flex items-center gap-2.5 mb-3.5">
+                    <FilePlus className="w-4.5 h-4.5 text-slate-700" />
+                    <span className="text-[13px] font-bold uppercase tracking-wider text-slate-800 font-poppins">
                       REQUIREMENTS
                     </span>
                   </div>
 
-                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-2.5 sm:p-3 space-y-2 max-h-60 overflow-y-auto">
+                  <div className="bg-white border border-slate-100 rounded-2xl p-1 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] max-h-60 overflow-y-auto divide-y divide-slate-100/80">
                     {parseRequirementsList(uploadingUnit.clearingUnit.description, uploadingUnit.clearingUnit.name).map((reqItem, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-6.5 h-6.5 rounded-full bg-slate-100 border border-slate-200/60 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                      <div key={idx} className="flex items-center justify-between p-3.5 gap-3">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[13px] font-bold text-slate-600 shrink-0">
                             {idx + 1}
                           </div>
-                          <span className="text-xs font-semibold text-slate-700 truncate">
+                          <span className="text-[13px] sm:text-sm font-medium text-slate-700 truncate">
                             {reqItem}
                           </span>
                         </div>
-                        <span className="shrink-0 bg-slate-100 text-slate-500 border border-slate-200/60 text-[10px] font-bold px-2.5 py-1 rounded-lg">
+                        <span className="shrink-0 bg-slate-50 text-slate-400 font-semibold text-[10px] sm:text-[11px] px-3 py-1 rounded-full border border-slate-100/80">
                           Not Submitted
                         </span>
                       </div>
@@ -853,7 +855,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
 
                 {/* Upload File Box / Selector Card */}
                 <div>
-                  <div className="border-2 border-dashed border-slate-200 hover:border-[#3482B9] bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-4 transition-all cursor-pointer relative group flex items-center justify-between">
+                  <div className="border border-dashed border-slate-300 hover:border-[#3482B9] bg-white rounded-2xl p-4 sm:p-5 transition-all cursor-pointer relative group flex items-center justify-between shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]">
                     <input
                       type="file"
                       accept=".pdf,image/*"
@@ -861,27 +863,27 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                       required={!selectedFile}
                       className="absolute inset-0 opacity-0 cursor-pointer z-10"
                     />
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-11 h-11 bg-blue-50 text-[#3482B9] rounded-xl flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-[#3482B9] group-hover:text-white transition-colors">
-                        <Upload className="w-5.5 h-5.5" />
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-12 h-12 bg-[#ebf3fa] text-[#3482B9] rounded-xl flex items-center justify-center shrink-0 group-hover:bg-[#3482B9] group-hover:text-white transition-colors">
+                        <FileUp className="w-6 h-6" />
                       </div>
                       <div className="flex flex-col min-w-0">
                         {selectedFile ? (
                           <>
-                            <span className="text-xs font-bold text-slate-800 truncate">
+                            <span className="text-[13px] sm:text-sm font-bold text-slate-800 truncate">
                               {selectedFile.name}
                             </span>
-                            <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                            <span className="text-[11px] text-emerald-600 font-semibold mt-0.5">
                               Ready to submit ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
                             </span>
                           </>
                         ) : (
                           <>
-                            <span className="text-xs font-bold text-slate-800 group-hover:text-[#3482B9] transition-colors">
+                            <span className="text-[13px] sm:text-sm font-bold text-slate-800 group-hover:text-[#3482B9] transition-colors">
                               Upload Document
                             </span>
-                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">
-                              PDF, JPG or PNG (Max 5MB)
+                            <span className="text-[11px] text-slate-400 font-medium mt-0.5">
+                              PDF, JPG or PNG (Max 10MB)
                             </span>
                           </>
                         )}
@@ -910,7 +912,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                 <button
                   type="submit"
                   disabled={uploadLoading || !selectedFile}
-                  className="w-full flex justify-center items-center py-3.5 px-4 rounded-2xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] shadow-md shadow-[#3482B9]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group mt-2"
+                  className="w-full flex justify-center items-center py-4 px-4 rounded-xl text-sm font-semibold text-white bg-[#1e6bb8] hover:bg-[#1a5b9e] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
                 >
                   {uploadLoading ? (
                     <>
@@ -926,42 +928,44 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               </form>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <FileCheck className="w-4 h-4 text-slate-700" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 font-poppins">
+                <div className="flex items-center gap-2.5 mb-3.5">
+                  <FileCheck className="w-4.5 h-4.5 text-slate-700" />
+                  <span className="text-[13px] font-bold uppercase tracking-wider text-slate-800 font-poppins">
                     REQUIREMENTS
                   </span>
                 </div>
 
-                <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3 space-y-2 max-h-52 overflow-y-auto">
+                <div className="bg-white border border-slate-100 rounded-2xl p-1 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] max-h-60 overflow-y-auto divide-y divide-slate-100/80">
                   {parseRequirementsList(uploadingUnit.clearingUnit.description, uploadingUnit.clearingUnit.name).map((reqItem, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-6.5 h-6.5 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
+                    <div key={idx} className="flex items-center justify-between p-3.5 gap-3">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[13px] font-bold text-emerald-600 shrink-0">
                           {idx + 1}
                         </div>
-                        <span className="text-xs font-semibold text-slate-700 truncate">
+                        <span className="text-[13px] sm:text-sm font-medium text-slate-700 truncate">
                           {reqItem}
                         </span>
                       </div>
-                      <span className={`shrink-0 border rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
+                      <span className={`shrink-0 border rounded-full px-3 py-1 text-[10px] sm:text-[11px] font-bold uppercase ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
                         {getStatusStyle(uploadingUnit.status).label}
                       </span>
                     </div>
                   ))}
                 </div>
 
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-7 h-7 text-[#3482B9] shrink-0" />
-                    <div className="min-w-0">
-                      <span className="block font-semibold text-xs text-slate-800">Submission Receipt</span>
-                      <span className="block text-[10px] text-slate-400 truncate">
+                <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 bg-blue-50/50 text-[#3482B9] rounded-xl flex items-center justify-center shrink-0">
+                      <FileText className="w-5.5 h-5.5" />
+                    </div>
+                    <div className="min-w-0 flex flex-col">
+                      <span className="text-[13px] sm:text-sm font-bold text-slate-800">Submission Receipt</span>
+                      <span className="text-[11px] text-slate-400 truncate mt-0.5">
                         Uploaded {uploadingUnit.submittedAt ? new Date(uploadingUnit.submittedAt).toLocaleDateString() : "Pending"}
                       </span>
                     </div>
                   </div>
-                  <span className={`inline-block border rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase shrink-0 ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
+                  <span className={`inline-block border rounded-full px-3 py-1 text-[10px] font-bold uppercase shrink-0 ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
                     {getStatusStyle(uploadingUnit.status).label}
                   </span>
                 </div>
