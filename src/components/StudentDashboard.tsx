@@ -9,10 +9,12 @@ import {
   LogOut, 
   Search, 
   ChevronDown, 
+  ChevronRight,
   TrendingUp, 
   Activity, 
   AlertCircle, 
   FileText, 
+  FileCheck,
   Upload, 
   Download, 
   Loader2,
@@ -61,6 +63,27 @@ interface StudentDashboardProps {
   };
   onLogout: () => void;
 }
+
+const parseRequirementsList = (description: string | undefined | null, unitName: string) => {
+  if (!description || !description.trim()) {
+    return [
+      `Official ${unitName} Clearance Form`,
+      `Department Book Returns & Library Clearance`,
+      `Verified Course Results & Academic Transcript`,
+      `Other Departmental Requirements`
+    ];
+  }
+  
+  const rawItems = description
+    .split(/\r?\n|;|•/)
+    .map(s => s.replace(/^[\s\d.\-*]+/, '').trim())
+    .filter(Boolean);
+
+  if (rawItems.length > 0) {
+    return rawItems;
+  }
+  return [description.trim()];
+};
 
 export default function StudentDashboard({ user, onLogout }: StudentDashboardProps) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -773,150 +796,177 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
 
       {/* 6. Document Upload / Detail Modal */}
       {uploadingUnit && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 transition-all">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 p-8 flex flex-col gap-6 relative">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-8 flex flex-col gap-6 relative font-poppins">
             <button 
               onClick={() => { setUploadingUnit(null); setSelectedFile(null); setUploadError(""); setShowUploadForm(false); }}
-              className="absolute right-6 top-6 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer animate-fade-in"
+              className="absolute right-6 top-6 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
 
             <div>
-              <h3 className="font-poppins font-semibold text-xl text-slate-800">
+              <h3 className="font-bold text-xl sm:text-2xl text-slate-900 tracking-tight">
                 {uploadingUnit.clearingUnit.name}
               </h3>
-              <p className="text-xs text-slate-400 font-poppins mt-1">
+              <p className="text-xs font-semibold text-slate-400 mt-1">
                 Clearance Submission Portal
               </p>
             </div>
 
             {uploadingUnit.status === "NOT_SUBMITTED" || uploadingUnit.status === "REJECTED" ? (
-              <>
-                {!showUploadForm ? (
-                  <div className="space-y-6 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {uploadingUnit.status === "REJECTED" && uploadingUnit.rejectionNote && (
-                      <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold mb-2">
-                        <span className="block uppercase text-[10px] tracking-wider mb-1 font-bold text-red-800">Rejection Note:</span>
-                        "{uploadingUnit.rejectionNote}"
-                      </div>
-                    )}
-                    {uploadingUnit.clearingUnit.description ? (
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 shadow-inner">
-                        <span className="block text-sm font-bold text-[#3482B9] uppercase tracking-wider mb-3 flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4" /> Requirements
-                        </span>
-                        <p className="text-sm text-slate-700 font-poppins whitespace-pre-wrap leading-relaxed">
-                          {uploadingUnit.clearingUnit.description}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-center">
-                        <p className="text-sm text-slate-500 font-poppins">No specific requirements listed.</p>
-                      </div>
-                    )}
-                    
-                    <button
-                      onClick={() => setShowUploadForm(true)}
-                      className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] shadow-md transition-all cursor-pointer mt-4"
-                    >
-                      Proceed to Upload <ArrowRight className="w-4 h-4 ml-2" />
-                    </button>
+              <form onSubmit={handleUploadSubmit} className="space-y-5">
+                {uploadingUnit.status === "REJECTED" && uploadingUnit.rejectionNote && (
+                  <div className="p-4 bg-red-50/90 border border-red-200 text-red-700 rounded-2xl text-xs font-medium shadow-sm">
+                    <span className="block uppercase text-[10px] tracking-wider mb-1 font-bold text-red-800">Rejection Note:</span>
+                    "{uploadingUnit.rejectionNote}"
                   </div>
-                ) : (
-                  <form onSubmit={handleUploadSubmit} className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <button type="button" onClick={() => setShowUploadForm(false)} className="text-[#3482B9] text-xs font-semibold hover:underline flex items-center gap-1 mb-2">
-                      &lt; Back to Requirements
-                    </button>
-                    {uploadError && (
-                      <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 font-semibold">
-                        {uploadError}
-                      </div>
-                    )}
+                )}
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                        Select Verification Document
-                      </label>
-                      <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 hover:border-[#3482B9] transition-all cursor-pointer relative group">
-                        <input
-                          type="file"
-                          accept=".pdf,image/*"
-                          onChange={handleFileChange}
-                          required
-                          className="absolute inset-0 opacity-0 cursor-pointer"
-                        />
-                        <Upload className="w-10 h-10 text-slate-450 group-hover:text-[#3482B9] transition-colors mb-3" />
-                        {selectedFile ? (
-                          <span className="text-xs text-slate-800 font-semibold break-all text-center">
-                            {selectedFile.name}
+                {/* Requirements Header + Itemized List Card */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileCheck className="w-4 h-4 text-slate-700" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 font-poppins">
+                      REQUIREMENTS
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-2.5 sm:p-3 space-y-2 max-h-60 overflow-y-auto">
+                    {parseRequirementsList(uploadingUnit.clearingUnit.description, uploadingUnit.clearingUnit.name).map((reqItem, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-6.5 h-6.5 rounded-full bg-slate-100 border border-slate-200/60 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                            {idx + 1}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700 truncate">
+                            {reqItem}
                           </span>
+                        </div>
+                        <span className="shrink-0 bg-slate-100 text-slate-500 border border-slate-200/60 text-[10px] font-bold px-2.5 py-1 rounded-lg">
+                          Not Submitted
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Upload File Box / Selector Card */}
+                <div>
+                  <div className="border-2 border-dashed border-slate-200 hover:border-[#3482B9] bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-4 transition-all cursor-pointer relative group flex items-center justify-between">
+                    <input
+                      type="file"
+                      accept=".pdf,image/*"
+                      onChange={handleFileChange}
+                      required={!selectedFile}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-11 h-11 bg-blue-50 text-[#3482B9] rounded-xl flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-[#3482B9] group-hover:text-white transition-colors">
+                        <Upload className="w-5.5 h-5.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        {selectedFile ? (
+                          <>
+                            <span className="text-xs font-bold text-slate-800 truncate">
+                              {selectedFile.name}
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                              Ready to submit ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+                            </span>
+                          </>
                         ) : (
                           <>
-                            <span className="text-xs text-slate-700 font-semibold">
-                              Click to browse file
+                            <span className="text-xs font-bold text-slate-800 group-hover:text-[#3482B9] transition-colors">
+                              Upload Document
                             </span>
-                            <span className="text-[10px] text-slate-400 mt-1">
-                              Accepts PDF, PNG, JPG up to 5MB
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                              PDF, JPG or PNG (Max 5MB)
                             </span>
                           </>
                         )}
                       </div>
                     </div>
+                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-[#3482B9] transition-colors shrink-0 ml-2" />
+                  </div>
+                </div>
 
-                    {checksum && (
-                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[10px]">
-                        <span className="font-semibold text-slate-400 uppercase">SHA-256 Checksum:</span>
-                        <span className="font-mono text-slate-500 break-all select-all font-semibold max-w-[250px] truncate" title={checksum}>
-                          {checksum}
-                        </span>
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={uploadLoading || !selectedFile}
-                      className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] focus:outline-none shadow-md shadow-[#3482B9]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {uploadLoading ? (
-                        <Loader2 className="animate-spin h-5 w-5 mr-2" />
-                      ) : (
-                        <>
-                          Upload Document & Submit
-                        </>
-                      )}
-                    </button>
-                  </form>
-                )}
-              </>
-            ) : (
-              <div className="space-y-4">
-                {uploadingUnit.clearingUnit.description && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                    <span className="block text-xs font-bold text-[#3482B9] uppercase tracking-wider mb-1">
-                      Required Documents
-                    </span>
-                    <p className="text-xs text-slate-700 font-poppins whitespace-pre-wrap">
-                      {uploadingUnit.clearingUnit.description}
-                    </p>
+                {uploadError && (
+                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 font-semibold">
+                    {uploadError}
                   </div>
                 )}
-                
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-8 h-8 text-[#3482B9]" />
-                    <div>
+
+                {checksum && (
+                  <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between text-[10px]">
+                    <span className="font-semibold text-slate-400 uppercase">SHA-256 Checksum:</span>
+                    <span className="font-mono text-slate-600 font-semibold truncate max-w-[240px]" title={checksum}>
+                      {checksum}
+                    </span>
+                  </div>
+                )}
+
+                {/* Primary Action Button */}
+                <button
+                  type="submit"
+                  disabled={uploadLoading || !selectedFile}
+                  className="w-full flex justify-center items-center py-3.5 px-4 rounded-2xl text-sm font-semibold text-white bg-[#3482B9] hover:bg-[#2a6996] shadow-md shadow-[#3482B9]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group mt-2"
+                >
+                  {uploadLoading ? (
+                    <>
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Submitting Request...
+                    </>
+                  ) : (
+                    <>
+                      Proceed to Upload <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileCheck className="w-4 h-4 text-slate-700" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 font-poppins">
+                    REQUIREMENTS
+                  </span>
+                </div>
+
+                <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3 space-y-2 max-h-52 overflow-y-auto">
+                  {parseRequirementsList(uploadingUnit.clearingUnit.description, uploadingUnit.clearingUnit.name).map((reqItem, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-6.5 h-6.5 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
+                          {idx + 1}
+                        </div>
+                        <span className="text-xs font-semibold text-slate-700 truncate">
+                          {reqItem}
+                        </span>
+                      </div>
+                      <span className={`shrink-0 border rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
+                        {getStatusStyle(uploadingUnit.status).label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="w-7 h-7 text-[#3482B9] shrink-0" />
+                    <div className="min-w-0">
                       <span className="block font-semibold text-xs text-slate-800">Submission Receipt</span>
-                      <span className="block text-[10px] text-slate-400">
+                      <span className="block text-[10px] text-slate-400 truncate">
                         Uploaded {uploadingUnit.submittedAt ? new Date(uploadingUnit.submittedAt).toLocaleDateString() : "Pending"}
                       </span>
                     </div>
                   </div>
-                  <span className={`inline-block border rounded px-2.5 py-1 text-[10px] font-bold uppercase ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
-                    {uploadingUnit.status}
+                  <span className={`inline-block border rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase shrink-0 ${getStatusStyle(uploadingUnit.status).bg} ${getStatusStyle(uploadingUnit.status).border} ${getStatusStyle(uploadingUnit.status).text}`}>
+                    {getStatusStyle(uploadingUnit.status).label}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-poppins text-center leading-relaxed mt-4">
+                
+                <p className="text-xs text-slate-400 font-poppins text-center leading-relaxed pt-2">
                   This unit is locked for review. You will receive a notification if corrections are needed.
                 </p>
               </div>
