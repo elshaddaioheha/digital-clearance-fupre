@@ -27,8 +27,19 @@ export async function verifyAuth(req: Request): Promise<{
   user: AuthenticatedUser | null;
   errorResponse: NextResponse | null;
 }> {
+  let token: string | null = null;
+
   const authHeader = req.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else {
+    try {
+      const url = new URL(req.url);
+      token = url.searchParams.get("token");
+    } catch (e) {}
+  }
+
+  if (!token) {
     return {
       user: null,
       errorResponse: NextResponse.json(
@@ -38,7 +49,6 @@ export async function verifyAuth(req: Request): Promise<{
     };
   }
 
-  const token = authHeader.split(" ")[1];
   const payload = await verifyAccessToken(token);
 
   if (!payload) {

@@ -16,11 +16,16 @@ The **FUPRE Digital Student Clearance System (DSCS)** is a centralized, role-bas
 
 ---
 
-### 2. High-Level System Architecture
-The application is structured as a three-tier architecture:
-- **Presentation Layer**: Next.js (React 19, TypeScript) styled with Tailwind CSS, utilizing a premium responsive UI design with dynamic bento-grids, bento-widgets, and an interactive clearance simulator.
-- **Application Logic Layer**: Next.js API routes handling business logic, state transitions, validation, and notification scheduling.
-- **Data Persistence Layer**: Supabase PostgreSQL database managed via Prisma ORM for type-safe queries and relational constraints.
+### 2. High-Level System Architecture & Design System
+The application is structured as a modern, unified three-tier architecture:
+
+- **Presentation Layer**: Next.js (React 19, TypeScript) styled with Tailwind CSS, utilizing a unified **FUPRE DSCS Design System**:
+  - **Dual-Tier Fixed Header**: White FUPRE institutional header with logo, motto ("Excellence and Relevance"), and role portal indicator; paired with an interactive `#3482B9` brand navigation bar.
+  - **Responsive Slide-Drawer Navigation**: Mobile-first overlay drawers with quick user profile access and seamless page switching.
+  - **Bento-Grid Statistics Widgets**: Dynamic 3- and 4-column stat cards with count displays, hover scale animations, and action links.
+  - **Standardized UI Components**: Unified status pill badges (`Cleared`, `Under Review`, `Rejected`, `Action Pending`), search/filter bars, and backdrop-blurred modal dialogs (`bg-black/50 backdrop-blur-xs`).
+- **Application Logic Layer**: Next.js App Router API routes handling business logic, state transitions, authentication middleware, and validation.
+- **Data Persistence Layer**: Supabase PostgreSQL database managed via Prisma ORM for type-safe queries, relational integrity, and soft deletes.
 
 ```mermaid
 graph TD
@@ -52,13 +57,6 @@ The system maps its entities using an ACID-compliant schema defined in Prisma.
 - **AuditLog**: An append-only historical log of all critical system actions.
 - **Notification**: Stores transactional message queues for in-app alert delivery.
 
-#### Database Relationships:
-- A `User` has a `one-to-one` relationship with either a `Student` or a `Staff` record.
-- A `Student` has `one-to-many` `ClearanceRequest` records (one per `ClearingUnit`).
-- A `ClearanceRequest` contains `one-to-many` `Document` uploads.
-- A `ClearingUnit` has a `many-to-many` relationship with `Staff` reviewers via `StaffUnitAssignment`.
-- Each `ClearanceRequest` has a `many-to-one` relationship with the `Staff` member who reviewed it (`reviewedBy`).
-
 ---
 
 ### 4. Sequential Clearance Workflow State Machine
@@ -75,28 +73,18 @@ The system models a student's clearance journey as a finite-state machine. Each 
 ```
 
 #### Workflow & Sequential Logic
-To ensure administrative sanity, clearances are processed **sequentially** based on the unit's `sortOrder` (e.g. HOD -> College Office -> Admissions -> Bursary -> Library -> ... -> Registrar):
+Clearances are processed **sequentially** based on the unit's `sortOrder` (HOD -> College -> Admissions -> Bursary -> Library -> Sports -> Health -> Security -> Student Affairs -> Exams & Records):
 1. A student cannot submit documents for a unit if any preceding unit in the sort order is not yet `APPROVED`.
-2. When all clearing units reach the `APPROVED` state, the student's status automatically transitions to `FULLY_CLEARED`.
+2. When all 10 clearing units reach `APPROVED`, the student's overall clearance status automatically updates to `FULLY_CLEARED`.
 3. Only upon reaching `FULLY_CLEARED` is the student allowed to download their system-generated digital clearance certificate.
 
 ---
 
 ### 5. Security & Threat Modeling
-A university administrative portal must enforce strict security boundaries. The system implements:
-- **Dual-Token Authentication (JWT + Refresh Tokens)**:
-  - **Access Tokens**: Short-lived (15 minutes) stateless JWTs passed via headers.
-  - **Refresh Tokens**: Long-lived (7 days) stateful tokens stored as HTTP-only, secure, SameSite=Strict cookies. Refresh token rotation is implemented to prevent replay attacks.
-- **Granular Role-Based Access Control (RBAC)**:
-  - Custom middleware parses the JWT and matches the user's role.
-  - Unit-level authorization guards verify that a `STAFF` user has a `StaffUnitAssignment` for the unit they are attempting to review. This prevents vertical and horizontal privilege escalation.
-- **Cryptographic File Integrity**:
-  - Uploaded files are checked on the server, and a SHA-256 checksum is calculated and stored in the database.
-  - This ensures that files cannot be tampered with or modified silently on the storage provider side.
-- **Database-Level Audit Security**:
-  - The `AuditLog` table records actor IDs, roles, actions (`USER_LOGIN`, `APPROVE_CLEARANCE`, `REJECT_CLEARANCE`, etc.), timestamps, and JSON-based metadata.
-  - In production, database user permissions are configured as **append-only** (`INSERT` privileges only) on the `AuditLog` table to guarantee audit logs cannot be edited or deleted even if the database credentials are compromised.
-- **Input Validation**: Custom Zod schemas sanitize and validate all API payloads prior to database queries.
+- **Dual-Token Authentication (JWT + Refresh Tokens)**: Short-lived access tokens via headers; long-lived refresh tokens in HTTP-only cookies.
+- **Granular Role-Based Access Control (RBAC)**: Enforces access restrictions for `STUDENT`, `STAFF`, `ADMIN`, and `REGISTRAR` roles.
+- **Cryptographic File Integrity**: SHA-256 checksum verification for uploaded documents.
+- **Append-Only Audit Security**: All administrative reviews and status overrides are logged immutably in `AuditLog`.
 
 ---
 
@@ -144,7 +132,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 #### Step 2: Database Setup & Migration
-Generate the Prisma client and apply the migrations:
+Generate the Prisma client and apply migrations:
 ```bash
 npx prisma generate
 npx prisma db push
@@ -160,19 +148,19 @@ npx prisma db seed
 ```bash
 npm run dev
 ```
-Open `http://localhost:3000` to interact with the application frontend and bento-grid dashboards.
 
 ---
 
-### 8. Verification and Automated Testing
+### 8. Verification and Automated End-to-End Testing
 
-The repository contains automated and manual testing runners to guarantee implementation correctness.
+The repository contains an automated integration runner for testing full end-to-end user flows across all 3 portals:
 
-- **Linting**:
-  `npm run lint` will verify and report type checks and code quality standards.
-- **API Verification Suite**:
-  Run the automated end-to-end integration tests using:
+- **Full E2E User Flow Test Suite**:
+  Run the automated test runner (spawns server and verifies all role endpoints):
+  ```bash
+  node test-runner.js
+  ```
+  Or run against an already running server on port 3000:
   ```bash
   node test-only.js
   ```
-  *(Make sure the development server is running on port 3000 before executing `test-only.js`)*.

@@ -56,6 +56,11 @@ export async function POST(
 
     const previousStatus = clearanceRequest.status;
 
+    // Check if the performing actor has a record in the Staff table
+    const staffRecord = await prisma.staff.findUnique({
+      where: { userId: user.userId },
+    });
+
     // 4. DB Transaction to perform override and notifications
     const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.clearanceRequest.update({
@@ -63,7 +68,7 @@ export async function POST(
         data: {
           status: status as ClearanceStatus,
           reviewedAt: new Date(),
-          reviewedBy: user.userId,
+          reviewedBy: staffRecord ? user.userId : null,
           rejectionNote: status === ClearanceStatus.REJECTED ? justification.trim() : null,
         },
       });

@@ -226,7 +226,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
       {/* 1. Dual-Tier Header */}
       <header className="fixed top-0 left-0 w-full z-30 shadow-md">
         {/* Tier 1: White logo header banner */}
-        <div className="bg-white h-16 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200">
+        <div className="bg-white h-16 px-4 sm:px-6 flex items-center justify-center sm:justify-between border-b border-slate-200">
           <div className="flex items-center gap-3">
             <img 
               src="/fupre_logo.png" 
@@ -352,11 +352,12 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
         
         {/* Title & Breadcrumb Block */}
         <div className="flex flex-col gap-2 mt-2">
-          <h2 className="font-poppins font-bold text-xl sm:text-2xl text-slate-800">
-            Clearance Queue
-          </h2>
+          <h1 className="font-poppins font-bold text-xl sm:text-2xl text-slate-800">
+            <span className="block text-[10px] sm:text-xs text-[#3482B9] uppercase tracking-wider mb-1">DSCS Staff Portal</span>
+            Clearance Review Queue
+          </h1>
           
-          <div className="bg-[#E2E8F0] px-4 py-2.5 rounded-lg text-xs font-semibold text-slate-600 flex items-center gap-2 border border-slate-300/40">
+          <div className="bg-[#E2E8F0] px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 flex items-center gap-2 border border-slate-300/40">
             <LayoutDashboard className="w-4 h-4 text-slate-500 shrink-0" />
             <span>Home</span>
             <span className="text-slate-400 font-normal">&gt;</span>
@@ -364,17 +365,16 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
           </div>
         </div>
 
-
-        {/* 4. Portal Statistics widgets */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-poppins">
+        {/* Portal Statistics widgets */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 font-poppins mb-2">
           {/* Card 1: Total Submissions (Green) */}
           <div className="bg-[#00A65A] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between min-h-[140px] transform hover:scale-[1.01] transition-transform">
-            <div className="p-6">
-              <span className="block font-bold text-4xl mb-1">{totalSubmissions}</span>
+            <div className="p-4 sm:p-6">
+              <span className="block font-bold text-4xl sm:text-5xl mb-1">{totalSubmissions}</span>
               <span className="text-xs font-bold uppercase tracking-wider text-white/80">Total Submissions</span>
             </div>
             <div 
-              className="bg-[#008d4c] py-2 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#00733e] transition-colors" 
+              className="bg-black/10 py-2.5 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-black/20 transition-colors" 
               onClick={() => handleScrollToSection("queue")}
             >
               <span>More info</span>
@@ -384,12 +384,12 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
           {/* Card 2: Action Pending (Orange) */}
           <div className="bg-[#F39C12] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between min-h-[140px] transform hover:scale-[1.01] transition-transform">
-            <div className="p-6">
-              <span className="block font-bold text-4xl mb-1">{pendingCount}</span>
+            <div className="p-4 sm:p-6">
+              <span className="block font-bold text-4xl sm:text-5xl mb-1">{pendingCount}</span>
               <span className="text-xs font-bold uppercase tracking-wider text-white/80">Pending Action</span>
             </div>
             <div 
-              className="bg-[#db8b0b] py-2 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#c87f0a] transition-colors" 
+              className="bg-black/10 py-2.5 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-black/20 transition-colors" 
               onClick={() => handleScrollToSection("queue")}
             >
               <span>More info</span>
@@ -399,12 +399,12 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
           {/* Card 3: Completed Reviews (Red style) */}
           <div className="bg-[#DD4B39] text-white rounded-xl shadow-md overflow-hidden flex flex-col justify-between min-h-[140px] transform hover:scale-[1.01] transition-transform">
-            <div className="p-6">
-              <span className="block font-bold text-4xl mb-1">{completedCount}</span>
+            <div className="p-4 sm:p-6">
+              <span className="block font-bold text-4xl sm:text-5xl mb-1">{completedCount}</span>
               <span className="text-xs font-bold uppercase tracking-wider text-white/80">Reviewed Requests</span>
             </div>
             <div 
-              className="bg-[#d73925] py-2 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#c23321] transition-colors" 
+              className="bg-black/10 py-2.5 px-4 text-center text-[10px] sm:text-xs font-semibold text-white/95 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-black/20 transition-colors" 
               onClick={() => handleScrollToSection("queue")}
             >
               <span>More info</span>
@@ -617,8 +617,8 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
       {/* 6. Rejection Reason Modal */}
       {rejectingRequest && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 transition-all">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-200 p-8 flex flex-col gap-6 relative">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8 flex flex-col gap-6 relative animate-in fade-in zoom-in-95 duration-150 font-poppins">
             <button 
               onClick={() => { setRejectingRequest(null); setRejectionNote(""); }}
               className="absolute right-6 top-6 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
@@ -627,43 +627,43 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-650">
-                <AlertTriangle className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="font-poppins font-semibold text-lg text-slate-800">
-                  Reject Clearance
+                <h3 className="font-poppins font-bold text-lg text-slate-800">
+                  Reject Clearance Request
                 </h3>
-                <p className="text-xs text-slate-450 font-poppins">
-                  Specify details for correction
+                <p className="text-xs text-slate-500 font-poppins">
+                  Provide specific reasons for rejection to the student
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleRejectSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Rejection Reason / Notes
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Rejection Reason / Remarks
                 </label>
                 <textarea
                   required
                   rows={4}
                   value={rejectionNote}
                   onChange={(e) => setRejectionNote(e.target.value)}
-                  placeholder="State the reason (e.g. Missing receipts, incorrect files, unpaid dues)."
-                  className="block w-full px-4 py-3 border border-slate-205 rounded-xl bg-slate-50 text-[#292D32] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3482B9] focus:border-transparent transition-all text-xs resize-none font-poppins font-medium leading-relaxed"
+                  placeholder="Specify missing documents, unverified details, or administrative requirements..."
+                  className="block w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-[#292D32] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3482B9] focus:border-transparent transition-all text-xs resize-none font-poppins font-medium leading-relaxed"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={actionLoading !== null || !rejectionNote.trim()}
-                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-750 focus:outline-none shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 focus:outline-none shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionLoading === rejectingRequest.id ? (
                   <Loader2 className="animate-spin h-5 w-5 mr-2" />
                 ) : (
-                  "Submit Rejection"
+                  "Confirm & Submit Rejection"
                 )}
               </button>
             </form>

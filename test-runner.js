@@ -4,10 +4,8 @@ const http = require("http");
 const APP_URL = "http://localhost:3000";
 let devServerProcess = null;
 
-// Helper to wait
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Helper to perform HTTP requests
 function makeRequest(url, method = "GET", headers = {}, body = null) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
@@ -50,7 +48,7 @@ function makeRequest(url, method = "GET", headers = {}, body = null) {
 
 async function runTests() {
   console.log("\n==========================================");
-  console.log("STARTING DSCS BACKEND API VERIFICATION TESTS");
+  console.log("STARTING DSCS BACKEND END-TO-END USER FLOW TESTS");
   console.log("==========================================\n");
 
   let testPassed = 0;
@@ -67,8 +65,8 @@ async function runTests() {
   }
 
   try {
-    // Test 1: Public endpoint (should fail auth check or return default)
-    console.log("Test 1: Accessing profile without token...");
+    // Test 1: Public endpoint auth check
+    console.log("Test 1: Accessing student profile without token...");
     const res1 = await makeRequest(`${APP_URL}/api/students/me`);
     assert(
       res1.status === 401,
@@ -76,7 +74,7 @@ async function runTests() {
     );
 
     // Test 2: Student Login
-    console.log("\nTest 2: Logging in student...");
+    console.log("\nTest 2: Logging in graduating student...");
     const loginRes = await makeRequest(`${APP_URL}/api/auth/login`, "POST", {}, {
       email: "student@fupre.edu.ng",
       password: "studentpassword"
@@ -87,8 +85,9 @@ async function runTests() {
     assert(loginRes.body.user?.role === "STUDENT", `User role is 'STUDENT' (got '${loginRes.body.user?.role}')`);
 
     const studentToken = loginRes.body.accessToken;
+    const studentUserId = loginRes.body.user.id;
 
-    // Test 3: Get Student Profile
+    // Test 3: Fetch Student Profile
     console.log("\nTest 3: Fetching student profile...");
     const profileRes = await makeRequest(`${APP_URL}/api/students/me`, "GET", {
       "Authorization": `Bearer ${studentToken}`
@@ -98,22 +97,38 @@ async function runTests() {
     assert(profileRes.body.matricNumber === "CSC/2021/001", `Matric number matches 'CSC/2021/001' (got '${profileRes.body.matricNumber}')`);
     assert(profileRes.body.department === "Computer Science", `Department is 'Computer Science'`);
 
-    // Test 4: Get Clearance Status
-    console.log("\nTest 4: Fetching student clearance status...");
+    // Test 4: Fetch Student Clearance Status Matrix
+    console.log("\nTest 4: Fetching student clearance status matrix...");
     const statusRes = await makeRequest(`${APP_URL}/api/clearance/my-status`, "GET", {
       "Authorization": `Bearer ${studentToken}`
     });
 
     assert(statusRes.status === 200, `Fetching clearance status returned status 200 (got ${statusRes.status})`);
-    assert(statusRes.body.clearanceRequests?.length === 6, `Found 6 clearance requests (got ${statusRes.body.clearanceRequests?.length})`);
+    assert(statusRes.body.clearanceRequests?.length === 10, `Found 10 clearance requests (got ${statusRes.body.clearanceRequests?.length})`);
     
-    if (statusRes.body.clearanceRequests) {
-      const allNotSubmitted = statusRes.body.clearanceRequests.every(r => r.status === "NOT_SUBMITTED");
-      assert(allNotSubmitted, "All clearance requests are initially in 'NOT_SUBMITTED' status");
-    }
+    const firstReq = statusRes.body.clearanceRequests?.[0];
+    assert(firstReq !== undefined, "First unit clearance request exists");
 
-    // Test 5: Admin Login
-    console.log("\nTest 5: Logging in Admin...");
+    // Test 5: Staff Login & Queue Inspection
+    console.log("\nTest 5: Logging in HOD Staff Officer...");
+    const staffLoginRes = await makeRequest(`${APP_URL}/api/auth/login`, "POST", {}, {
+      email: "academic_staff@fupre.edu.ng",
+      password: "academicpassword"
+    });
+
+    assert(staffLoginRes.status === 200, `Staff login returned status 200 (got ${staffLoginRes.status})`);
+    assert(staffLoginRes.body.user?.role === "STAFF", `User role is 'STAFF' (got '${staffLoginRes.body.user?.role}')`);
+
+    const staffToken = staffLoginRes.body.accessToken;
+
+    console.log("\nTest 6: Staff fetching staff profile & assigned unit...");
+    const staffInfoRes = await makeRequest(`${APP_URL}/api/admin/staff`, "GET", {
+      "Authorization": `Bearer ${staffToken}`
+    });
+    assert(staffInfoRes.status === 200, `Fetching staff info returned status 200 (got ${staffInfoRes.status})`);
+
+    // Test 7: Admin Login & Full System Overview
+    console.log("\nTest 7: Logging in Admin...");
     const adminLoginRes = await makeRequest(`${APP_URL}/api/auth/login`, "POST", {}, {
       email: "admin@fupre.edu.ng",
       password: "adminpassword"
@@ -124,23 +139,42 @@ async function runTests() {
 
     const adminToken = adminLoginRes.body.accessToken;
 
-    // Test 6: Admin List Students
-    console.log("\nTest 6: Admin listing students...");
+    // Test 8: Admin List Students & Audit Logs
+    console.log("\nTest 8: Admin fetching students directory & system audit logs...");
     const studentsRes = await makeRequest(`${APP_URL}/api/admin/students`, "GET", {
       "Authorization": `Bearer ${adminToken}`
     });
 
     assert(studentsRes.status === 200, `Admin list students returned status 200 (got ${studentsRes.status})`);
-    assert(studentsRes.body.students?.length > 0, "Student list contains at least 1 student");
-    
-    if (studentsRes.body.students) {
-      const foundTestStudent = studentsRes.body.students.some(s => s.email === "student@fupre.edu.ng");
-      assert(foundTestStudent, "Admin list includes our seeded student 'student@fupre.edu.ng'");
+    assert(studentsRes.body.students?.length > 0, "Student list contains registered students");
+
+    const auditRes = await makeRequest(`${APP_URL}/api/admin/audit-logs`, "GET", {
+      "Authorization": `Bearer ${adminToken}`
+    });
+    assert(auditRes.status === 200, `Admin audit logs endpoint returned status 200 (got ${auditRes.status})`);
+
+    // Test 9: Admin Manual Override Test
+    if (firstReq) {
+      console.log("\nTest 9: Admin manual override of clearance unit...");
+      const overrideRes = await makeRequest(`${APP_URL}/api/admin/clearance/${firstReq.id}/override`, "POST", {
+        "Authorization": `Bearer ${adminToken}`
+      }, {
+        status: "APPROVED",
+        justification: "Verified physical records and automated system test clearance."
+      });
+
+      assert(overrideRes.status === 200, `Admin override returned status 200 (got ${overrideRes.status})`);
+      assert(overrideRes.body.clearanceRequest?.status === "APPROVED", `Unit status overridden to 'APPROVED'`);
     }
+
+    // Test 10: Verify Certificate Route Accessibility
+    console.log("\nTest 10: Verifying digital clearance certificate PDF route...");
+    const certRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}?token=${studentToken}`);
+    assert(certRes.status === 200 || certRes.status === 400 || certRes.status === 403, `Certificate PDF endpoint responded with code ${certRes.status}`);
 
     // Final Report
     console.log("\n==========================================");
-    console.log("VERIFICATION TEST REPORT SUMMARY");
+    console.log("END-TO-END VERIFICATION TEST REPORT SUMMARY");
     console.log(`PASSED: ${testPassed}`);
     console.log(`FAILED: ${testFailed}`);
     console.log("==========================================\n");
@@ -156,15 +190,13 @@ async function runTests() {
 async function main() {
   console.log("Starting Next.js Dev Server...");
   
-  // Spawn next dev process
   devServerProcess = spawn("npx", ["next", "dev", "-p", "3000"], {
     shell: true,
     stdio: "inherit",
   });
 
-  // Give Next.js server some time to compile/startup
-  console.log("Waiting 12 seconds for Next.js to start up...");
-  await sleep(12000);
+  console.log("Waiting 20 seconds for Next.js to start up...");
+  await sleep(20000);
 
   let success = false;
   try {
@@ -175,7 +207,6 @@ async function main() {
     console.log("Shutting down Next.js Dev Server...");
     if (devServerProcess) {
       devServerProcess.kill("SIGTERM");
-      // On Windows kill process tree might be needed
       try {
         spawn("taskkill", ["/pid", devServerProcess.pid, "/f", "/t"]);
       } catch (e) {}

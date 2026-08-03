@@ -17,7 +17,7 @@ const createStaffSchema = z.object({
 // GET /api/admin/staff - List all staff
 export async function GET(req: Request) {
   try {
-    const { user, errorResponse } = await requireRole(req, [Role.ADMIN]);
+    const { user, errorResponse } = await requireRole(req, [Role.ADMIN, Role.STAFF]);
     if (errorResponse) return errorResponse;
 
     const staffMembers = await prisma.staff.findMany({
