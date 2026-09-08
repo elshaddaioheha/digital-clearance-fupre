@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { Role, ClearanceStatus } from "@/lib/auth";
 import { requireRole } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { uploadFile } from "@/lib/storage";
+import { uploadFile, StorageError } from "@/lib/storage";
 import { createAuditLog } from "@/lib/audit";
 
 export async function POST(
@@ -205,6 +205,20 @@ export async function POST(
     });
   } catch (error: any) {
     console.error("Submit clearance error:", error);
+
+    // Documents are uploaded before the database transaction, so a storage
+    // failure means nothing was recorded. Say so instead of returning a generic
+    // 500 that leaves the student unsure whether to resubmit.
+    if (error instanceof StorageError) {
+      return NextResponse.json(
+        {
+          error:
+            "Document storage is currently unavailable, so your submission was not saved. Please try again, or contact the system administrator if this persists.",
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

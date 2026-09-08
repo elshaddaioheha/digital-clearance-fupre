@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, readJson, errorMessage, getFreshToken } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -108,21 +109,15 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [photoUploading, setPhotoUploading] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
-
   const fetchData = async () => {
     try {
-      const profileRes = await fetch("/api/students/me", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const profileData = await profileRes.json();
-      setProfile(profileData);
+      const profileRes = await apiFetch("/api/students/me");
+      const profileData = await readJson(profileRes);
+      if (profileRes.ok && profileData) setProfile(profileData);
 
-      const statusRes = await fetch("/api/clearance/my-status", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const statusData = await statusRes.json();
-      setRequests(statusData.clearanceRequests || []);
+      const statusRes = await apiFetch("/api/clearance/my-status");
+      const statusData = await readJson(statusRes);
+      setRequests(statusData?.clearanceRequests || []);
     } catch (e) {
       console.error("Error loading student dashboard details:", e);
     } finally {
@@ -131,10 +126,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   };
 
   useEffect(() => {
-    if (token) {
-      fetchData();
-    }
-  }, [token]);
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const calculateChecksum = async (file: File) => {
     const arrayBuffer = await file.arrayBuffer();
@@ -167,17 +161,16 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     formData.append("file", file);
 
     try {
-      const response = await fetch("/api/students/me/photo", {
+      const response = await apiFetch("/api/students/me/photo", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
         body: formData
       });
 
-      const data = await response.json();
-      if (response.ok) {
+      const data = await readJson(response);
+      if (response.ok && data) {
         setProfile(prev => prev ? { ...prev, profilePhotoUrl: data.profilePhotoUrl } : prev);
       } else {
-        alert(data.error || "Failed to upload photo");
+        alert(await errorMessage(response, "Failed to upload photo"));
       }
     } catch (err) {
       console.error("Photo upload error:", err);
@@ -200,15 +193,13 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     formData.append("files", selectedFile);
 
     try {
-      const response = await fetch(`/api/clearance/${uploadingUnit.unitId}/submit`, {
+      const response = await apiFetch(`/api/clearance/${uploadingUnit.unitId}/submit`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
         body: formData
       });
 
-      const resData = await response.json();
       if (!response.ok) {
-        throw new Error(resData.error || "Failed to submit document");
+        throw new Error(await errorMessage(response, "Failed to submit document"));
       }
 
       setUploadingUnit(null);
@@ -282,9 +273,13 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     }
   };
 
-  const handleDownloadCertificate = () => {
+  const handleDownloadCertificate = async () => {
     if (!profile) return;
-    window.open(`/api/certificates/${user.id}?token=${token}`, "_blank");
+    // The PDF is fetched by the browser, not by apiFetch, so mint a fresh token
+    // first rather than handing over one that may have already expired.
+    const freshToken = await getFreshToken();
+    if (!freshToken) return;
+    window.open(`/api/certificates/${user.id}?token=${freshToken}`, "_blank");
   };
 
   const handleScrollToSection = (id: string) => {

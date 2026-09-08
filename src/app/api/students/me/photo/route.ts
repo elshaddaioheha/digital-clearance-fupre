@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Role, requireRole } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { uploadFile } from "@/lib/storage";
+import { uploadFile, StorageError } from "@/lib/storage";
 
 export async function POST(req: Request) {
   try {
@@ -52,6 +52,14 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error("Profile photo upload error:", error);
+
+    if (error instanceof StorageError) {
+      return NextResponse.json(
+        { error: "Photo storage is currently unavailable. Your photo was not saved." },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

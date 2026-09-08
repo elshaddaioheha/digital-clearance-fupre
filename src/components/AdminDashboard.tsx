@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, readJson, errorMessage } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -86,21 +87,15 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [filterStatus, setFilterStatus] = useState("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
-
   const fetchAdminData = async () => {
     try {
-      const studentRes = await fetch("/api/admin/students", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const studentData = await studentRes.json();
-      setStudents(studentData.students || []);
+      const studentRes = await apiFetch("/api/admin/students");
+      const studentData = await readJson(studentRes);
+      setStudents(studentData?.students || []);
 
-      const logsRes = await fetch("/api/admin/audit-logs", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const logsData = await logsRes.json();
-      setAuditLogs(logsData.auditLogs || []);
+      const logsRes = await apiFetch("/api/admin/audit-logs");
+      const logsData = await readJson(logsRes);
+      setAuditLogs(logsData?.auditLogs || []);
     } catch (e) {
       console.error("Error fetching admin dashboard records:", e);
     } finally {
@@ -109,10 +104,9 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   };
 
   useEffect(() => {
-    if (token) {
-      fetchAdminData();
-    }
-  }, [token]);
+    fetchAdminData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleOverrideSubmit = async (e: React.FormEvent, forceStatus: "APPROVED" | "REJECTED") => {
     e.preventDefault();
@@ -120,21 +114,17 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
     setOverrideLoading(true);
     try {
-      const res = await fetch(`/api/admin/clearance/${overrideRequest.id}/override`, {
+      const res = await apiFetch(`/api/admin/clearance/${overrideRequest.id}/override`, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           status: forceStatus, 
           justification: overrideNote 
         })
       });
 
-      const resData = await res.json();
       if (!res.ok) {
-        throw new Error(resData.error || "Override request failed");
+        throw new Error(await errorMessage(res, "Override request failed"));
       }
 
       setOverrideRequest(null);

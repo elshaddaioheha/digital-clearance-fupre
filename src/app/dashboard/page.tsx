@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import StudentDashboard from "@/components/StudentDashboard";
 import StaffDashboard from "@/components/StaffDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
+import { clearSession } from "@/lib/api-client";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -18,15 +19,13 @@ export default function DashboardPage() {
 
     if (!token || !storedUser) {
       // Clear storage and redirect to login if auth parameters are missing
-      localStorage.removeItem("dscs_token");
-      localStorage.removeItem("dscs_user");
+      clearSession();
       router.push("/login");
     } else {
       try {
         setUser(JSON.parse(storedUser));
       } catch (e) {
-        localStorage.removeItem("dscs_token");
-        localStorage.removeItem("dscs_user");
+        clearSession();
         router.push("/login");
       } finally {
         setLoading(false);
@@ -42,8 +41,7 @@ export default function DashboardPage() {
     } catch (e) {
       console.error("Logout endpoint failure:", e);
     } finally {
-      localStorage.removeItem("dscs_token");
-      localStorage.removeItem("dscs_user");
+      clearSession();
       router.push("/login");
       router.refresh();
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, readJson, errorMessage } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -70,14 +71,10 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
   const [filterStatus, setFilterStatus] = useState("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
-
   const fetchSubmissions = async () => {
     try {
-      const staffRes = await fetch("/api/admin/staff", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const staffData = await staffRes.json();
+      const staffRes = await apiFetch("/api/admin/staff");
+      const staffData = await readJson(staffRes);
       
       const currentStaff = staffData.staff?.find((s: any) => s.id === user.id);
       const assignedUnit = currentStaff?.assignments?.[0];
@@ -86,11 +83,9 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
         setUnitName(assignedUnit.unitName);
         setUnitId(assignedUnit.unitId);
 
-        const subRes = await fetch(`/api/units/${assignedUnit.unitId}/submissions`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        const subData = await subRes.json();
-        setSubmissions(subData.submissions || []);
+        const subRes = await apiFetch(`/api/units/${assignedUnit.unitId}/submissions`);
+        const subData = await readJson(subRes);
+        setSubmissions(subData?.submissions || []);
       }
     } catch (e) {
       console.error("Error loading staff review queue:", e);
@@ -100,27 +95,22 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
   };
 
   useEffect(() => {
-    if (token) {
-      fetchSubmissions();
-    }
-  }, [token]);
+    fetchSubmissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleApprove = async (requestId: string) => {
     if (!confirm("Are you sure you want to approve this student's clearance request?")) return;
     setActionLoading(requestId);
 
     try {
-      const res = await fetch(`/api/submissions/${requestId}/approve`, {
+      const res = await apiFetch(`/api/submissions/${requestId}/approve`, {
         method: "PATCH",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
+        headers: { "Content-Type": "application/json" }
       });
-      
-      const resData = await res.json();
+
       if (!res.ok) {
-        throw new Error(resData.error || "Approval failed");
+        throw new Error(await errorMessage(res, "Approval failed"));
       }
 
       fetchSubmissions();
@@ -139,18 +129,14 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
     setActionLoading(requestId);
 
     try {
-      const res = await fetch(`/api/submissions/${requestId}/reject`, {
+      const res = await apiFetch(`/api/submissions/${requestId}/reject`, {
         method: "PATCH",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rejectionNote })
       });
-      
-      const resData = await res.json();
+
       if (!res.ok) {
-        throw new Error(resData.error || "Rejection failed");
+        throw new Error(await errorMessage(res, "Rejection failed"));
       }
 
       setRejectingRequest(null);
