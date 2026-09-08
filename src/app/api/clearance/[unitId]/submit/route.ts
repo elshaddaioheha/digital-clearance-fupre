@@ -34,40 +34,42 @@ export async function POST(
       );
     }
 
-    // Enforce Sequential Clearance Order
-    if (unit.sortOrder > 1) {
-      // Find the previous active unit in the sequence
-      const previousUnit = await prisma.clearingUnit.findFirst({
+    // Enforce Sequential Clearance Order.
+    // Every active unit earlier in the sequence must be APPROVED, not just the
+    // one immediately before this unit — otherwise a single approved
+    // predecessor would unlock the rest of the chain.
+    const precedingUnits = await prisma.clearingUnit.findMany({
+      where: {
+        sortOrder: { lt: unit.sortOrder },
+        isActive: true,
+      },
+      orderBy: { sortOrder: "asc" },
+    });
+
+    if (precedingUnits.length > 0) {
+      const precedingRequests = await prisma.clearanceRequest.findMany({
         where: {
-          sortOrder: {
-            lt: unit.sortOrder,
-          },
-          isActive: true,
+          studentId: user.userId,
+          unitId: { in: precedingUnits.map((u) => u.id) },
         },
-        orderBy: {
-          sortOrder: "desc",
-        },
+        select: { unitId: true, status: true },
       });
 
-      if (previousUnit) {
-        // Find the clearance request for the previous unit
-        const previousRequest = await prisma.clearanceRequest.findUnique({
-          where: {
-            studentId_unitId: {
-              studentId: user.userId,
-              unitId: previousUnit.id,
-            },
-          },
-        });
+      const statusByUnitId = new Map(
+        precedingRequests.map((r) => [r.unitId, r.status])
+      );
 
-        if (!previousRequest || previousRequest.status !== "APPROVED") {
-          return NextResponse.json(
-            {
-              error: `Sequential clearance required. You must obtain approval from "${previousUnit.name}" before submitting documents for "${unit.name}".`,
-            },
-            { status: 400 }
-          );
-        }
+      const blockingUnit = precedingUnits.find(
+        (u) => statusByUnitId.get(u.id) !== ClearanceStatus.APPROVED
+      );
+
+      if (blockingUnit) {
+        return NextResponse.json(
+          {
+            error: `Sequential clearance required. You must obtain approval from "${blockingUnit.name}" before submitting documents for "${unit.name}".`,
+          },
+          { status: 400 }
+        );
       }
     }
 

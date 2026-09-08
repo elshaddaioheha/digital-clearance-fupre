@@ -79,14 +79,14 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
       });
       const staffData = await staffRes.json();
       
-      const currentStaff = staffData.staff?.find((s: any) => s.userId === user.id);
-      const assignedUnit = currentStaff?.assignments?.[0]?.clearingUnit;
+      const currentStaff = staffData.staff?.find((s: any) => s.id === user.id);
+      const assignedUnit = currentStaff?.assignments?.[0];
 
       if (assignedUnit) {
-        setUnitName(assignedUnit.name);
-        setUnitId(assignedUnit.id);
-        
-        const subRes = await fetch(`/api/units/${assignedUnit.id}/submissions`, {
+        setUnitName(assignedUnit.unitName);
+        setUnitId(assignedUnit.unitId);
+
+        const subRes = await fetch(`/api/units/${assignedUnit.unitId}/submissions`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         const subData = await subRes.json();
@@ -111,7 +111,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
     try {
       const res = await fetch(`/api/submissions/${requestId}/approve`, {
-        method: "POST",
+        method: "PATCH",
         headers: { 
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
@@ -140,7 +140,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
     try {
       const res = await fetch(`/api/submissions/${requestId}/reject`, {
-        method: "POST",
+        method: "PATCH",
         headers: { 
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`

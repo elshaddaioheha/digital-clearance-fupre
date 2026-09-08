@@ -53,7 +53,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 4. Update request status to REJECTED in transaction
+    // 4. State Guard: only a request the student has actually submitted may be
+    // reviewed. Blocks rejecting NOT_SUBMITTED requests and re-reviewing one
+    // that was already decided.
+    const reviewableStatuses: string[] = [
+      ClearanceStatus.PENDING_REVIEW,
+      ClearanceStatus.UNDER_REVIEW,
+    ];
+
+    if (!reviewableStatuses.includes(clearanceRequest.status)) {
+      return NextResponse.json(
+        {
+          error:
+            clearanceRequest.status === ClearanceStatus.NOT_SUBMITTED
+              ? "Conflict: This student has not submitted any documents for this unit yet."
+              : `Conflict: This request has already been reviewed (${clearanceRequest.status}) and cannot be rejected again.`,
+          currentStatus: clearanceRequest.status,
+        },
+        { status: 409 }
+      );
+    }
+
+    // 5. Update request status to REJECTED in transaction
     const updatedRequest = await prisma.$transaction(async (tx) => {
       const updated = await tx.clearanceRequest.update({
         where: { id: requestId },
@@ -77,7 +98,7 @@ export async function PATCH(
       return updated;
     });
 
-    // 5. Audit Log
+    // 6. Audit Log
     await createAuditLog({
       actorId: user.userId,
       actorRole: user.role as Role,

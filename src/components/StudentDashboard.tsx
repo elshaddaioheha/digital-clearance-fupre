@@ -195,8 +195,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     setUploadError("");
 
     const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("checksum", checksum);
+    // The submit route reads `formData.getAll("files")` and recomputes the
+    // SHA-256 itself, so the checksum shown in the UI is display-only.
+    formData.append("files", selectedFile);
 
     try {
       const response = await fetch(`/api/clearance/${uploadingUnit.unitId}/submit`, {
@@ -222,11 +223,11 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     }
   };
 
+  // Mirrors the server-side gate in /api/clearance/[unitId]/submit: every
+  // earlier unit must be approved, not just the one directly before this one.
   const isRequestUnlocked = (req: ClearanceRequest) => {
     const predecessors = requests.filter(r => r.clearingUnit.sortOrder < req.clearingUnit.sortOrder);
-    if (predecessors.length === 0) return true;
-    const directPredecessor = [...predecessors].sort((a, b) => b.clearingUnit.sortOrder - a.clearingUnit.sortOrder)[0];
-    return directPredecessor.status === "APPROVED";
+    return predecessors.every(r => r.status === "APPROVED");
   };
 
   // Stats calculation
