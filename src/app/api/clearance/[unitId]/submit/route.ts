@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { Role, ClearanceStatus } from "@/lib/auth";
 import { requireRole } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { uploadFile, StorageError } from "@/lib/storage";
+import { uploadFile, deleteFiles, StorageError } from "@/lib/storage";
 import { createAuditLog } from "@/lib/audit";
 
 export async function POST(
@@ -135,27 +135,41 @@ export async function POST(
     // 6. Upload Files & Calculate Checksums
     const uploadedDocs: { fileName: string; fileUrl: string; checksum: string }[] = [];
 
-    for (const file of files) {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      
-      // Calculate SHA-256 checksum for integrity verification
-      const checksum = crypto
-        .createHash("sha256")
-        .update(buffer)
-        .digest("hex");
+    try {
+      for (const file of files) {
+        const buffer = Buffer.from(await file.arrayBuffer());
 
-      // Upload file
-      const fileUrl = await uploadFile(buffer, file.name, file.type);
-      
-      uploadedDocs.push({
-        fileName: file.name,
-        fileUrl,
-        checksum,
-      });
+        // Calculate SHA-256 checksum for integrity verification
+        const checksum = crypto
+          .createHash("sha256")
+          .update(buffer)
+          .digest("hex");
+
+        // Upload file
+        const fileUrl = await uploadFile(buffer, file.name, file.type);
+
+        uploadedDocs.push({
+          fileName: file.name,
+          fileUrl,
+          checksum,
+        });
+      }
+    } catch (uploadError) {
+      // A later file failed, so nothing will be recorded. Remove the ones that
+      // already landed rather than leaving them unreferenced in storage.
+      await deleteFiles(uploadedDocs.map((doc) => doc.fileUrl));
+      throw uploadError;
     }
 
     // 7. DB Update inside transaction
-    const finalRequest = await prisma.$transaction(async (tx) => {
+    const { finalRequest, replacedFileUrls } = await prisma.$transaction(async (tx) => {
+      // Note which files the previous submission pointed at so they can be
+      // removed from storage once this transaction commits.
+      const previousDocuments = await tx.document.findMany({
+        where: { requestId: clearanceRequest.id },
+        select: { fileUrl: true },
+      });
+
       // Delete previous documents for this request (overwrite submission)
       await tx.document.deleteMany({
         where: { requestId: clearanceRequest.id },
@@ -172,7 +186,7 @@ export async function POST(
       });
 
       // Update Clearance Request status
-      return await tx.clearanceRequest.update({
+      const updated = await tx.clearanceRequest.update({
         where: { id: clearanceRequest.id },
         data: {
           status: ClearanceStatus.PENDING_REVIEW,
@@ -183,7 +197,16 @@ export async function POST(
           documents: true,
         },
       });
+
+      return {
+        finalRequest: updated,
+        replacedFileUrls: previousDocuments.map((doc) => doc.fileUrl),
+      };
     });
+
+    // The rows are committed, so the superseded files are now unreferenced.
+    // deleteFiles never throws — a failed cleanup must not fail the submission.
+    await deleteFiles(replacedFileUrls);
 
     // 8. Audit Log
     await createAuditLog({

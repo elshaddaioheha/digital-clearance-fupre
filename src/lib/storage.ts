@@ -121,6 +121,60 @@ export async function uploadFile(
   return writeToLocalDisk(uniqueName, fileBuffer);
 }
 
+/**
+ * Best-effort removal of previously stored files.
+ *
+ * Resubmitting replaces a request's Document rows, which used to leave the
+ * underlying files behind forever. Failures here are logged and swallowed: the
+ * database is already consistent by this point, and losing a cleanup is far
+ * less harmful than failing a submission that actually succeeded.
+ */
+export async function deleteFiles(fileUrls: string[]): Promise<void> {
+  if (fileUrls.length === 0) return;
+
+  const localNames: string[] = [];
+  const remoteNames: string[] = [];
+
+  for (const url of fileUrls) {
+    if (url.startsWith("/uploads/")) {
+      localNames.push(url.slice("/uploads/".length));
+    } else if (url.includes(`/${BUCKET_NAME}/`)) {
+      // Public URLs look like .../object/public/<bucket>/<name>
+      const name = url.split(`/${BUCKET_NAME}/`).pop();
+      if (name) remoteNames.push(decodeURIComponent(name.split("?")[0]));
+    }
+  }
+
+  if (supabase && remoteNames.length > 0) {
+    try {
+      const { error } = await supabase.storage.from(BUCKET_NAME).remove(remoteNames);
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      console.warn(
+        `[storage] Could not remove ${remoteNames.length} replaced file(s) from Supabase: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
+  for (const name of localNames) {
+    try {
+      // Guard against a stored value that tries to escape the upload directory.
+      if (name.includes("/") || name.includes("\\") || name.includes("..")) continue;
+
+      const filePath = path.join(process.cwd(), "public", "uploads", name);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (err) {
+      console.warn(
+        `[storage] Could not remove replaced local file ${name}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+}
+
 function writeToLocalDisk(uniqueName: string, fileBuffer: Buffer): string {
   try {
     const uploadDir = path.join(process.cwd(), "public", "uploads");

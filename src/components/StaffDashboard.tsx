@@ -73,11 +73,10 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
   const fetchSubmissions = async () => {
     try {
-      const staffRes = await apiFetch("/api/admin/staff");
+      const staffRes = await apiFetch("/api/staff/me");
       const staffData = await readJson(staffRes);
-      
-      const currentStaff = staffData.staff?.find((s: any) => s.id === user.id);
-      const assignedUnit = currentStaff?.assignments?.[0];
+
+      const assignedUnit = staffData?.assignments?.[0];
 
       if (assignedUnit) {
         setUnitName(assignedUnit.unitName);

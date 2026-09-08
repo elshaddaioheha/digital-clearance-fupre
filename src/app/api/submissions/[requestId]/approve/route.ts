@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Role, ClearanceStatus } from "@/lib/auth";
-import { requireUnitAccess } from "@/lib/auth";
+import { requireRole, checkUnitAccess } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 
@@ -11,9 +11,16 @@ export async function PATCH(
   try {
     const { requestId } = await props.params;
 
-    // 1. Authenticate (Verify standard login first)
-    // We cannot verify unit access until we know the request's unit ID.
-    // So we fetch the request first.
+    // 1. Authenticate before touching the database, so an anonymous caller
+    // cannot tell an existing request ID from a missing one.
+    const { user, errorResponse } = await requireRole(req, [Role.STAFF, Role.ADMIN]);
+    if (errorResponse) return errorResponse;
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Load the request, then authorize the reviewer against its unit.
     const clearanceRequest = await prisma.clearanceRequest.findUnique({
       where: { id: requestId },
       include: {
@@ -33,16 +40,8 @@ export async function PATCH(
       );
     }
 
-    // 2. Perform unit-level RBAC check
-    const { user, errorResponse } = await requireUnitAccess(
-      req,
-      clearanceRequest.unitId
-    );
-    if (errorResponse) return errorResponse;
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const accessError = await checkUnitAccess(user, clearanceRequest.unitId);
+    if (accessError) return accessError;
 
     // 3. State Guard: only a request the student has actually submitted may be
     // reviewed. Blocks approving NOT_SUBMITTED requests (which carry no

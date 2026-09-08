@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Role } from "@/lib/auth";
+import { Role, ClearanceStatus } from "@/lib/auth";
 import { requireRole } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
@@ -13,7 +13,29 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Fetch all clearance requests for the student
+    // 2. Backfill any missing rows before reading.
+    //
+    // Units created after a student registered have no request row yet. This
+    // runs first and is idempotent — skipDuplicates makes two concurrent first
+    // loads safe, where the previous version raced on the
+    // [studentId, unitId] unique constraint and returned a 500.
+    const activeUnits = await prisma.clearingUnit.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
+    if (activeUnits.length > 0) {
+      await prisma.clearanceRequest.createMany({
+        data: activeUnits.map((unit) => ({
+          studentId: user.userId,
+          unitId: unit.id,
+          status: ClearanceStatus.NOT_SUBMITTED,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // 3. Fetch all clearance requests for the student
     const requests = await prisma.clearanceRequest.findMany({
       where: { studentId: user.userId },
       include: {
@@ -40,26 +62,6 @@ export async function GET(req: Request) {
         },
       },
     });
-
-    // Check if requests exist. If not, maybe initialize them if clearing units exist
-    if (requests.length === 0) {
-      const activeUnits = await prisma.clearingUnit.findMany({
-        where: { isActive: true },
-      });
-
-      if (activeUnits.length > 0) {
-        await prisma.clearanceRequest.createMany({
-          data: activeUnits.map((unit) => ({
-            studentId: user.userId,
-            unitId: unit.id,
-            status: "NOT_SUBMITTED",
-          })),
-        });
-
-        // Re-fetch
-        return GET(req);
-      }
-    }
 
     return NextResponse.json({
       clearanceRequests: requests,
