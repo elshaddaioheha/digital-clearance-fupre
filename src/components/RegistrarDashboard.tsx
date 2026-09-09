@@ -20,7 +20,7 @@ interface ClearanceRequestSummary {
   id: string;
   status: string;
   unitId: string;
-  clearingUnit: { name: string };
+  clearingUnit: { name: string; sortOrder: number };
 }
 
 interface StudentRow {
@@ -92,8 +92,18 @@ export default function RegistrarDashboard({ user, onLogout }: RegistrarDashboar
   const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
   const handleExportCsv = () => {
-    const unitNames = Array.from(
-      new Set(students.flatMap((s) => s.clearanceRequests.map((r) => r.clearingUnit.name)))
+    // One column per clearing unit, in clearance order. Collecting names into
+    // a Set alone would leave the columns in whatever order the rows happened
+    // to arrive in, which reads as arbitrary next to a sequential process.
+    const unitOrder = new Map<string, number>();
+    for (const student of students) {
+      for (const request of student.clearanceRequests) {
+        unitOrder.set(request.clearingUnit.name, request.clearingUnit.sortOrder);
+      }
+    }
+
+    const unitNames = Array.from(unitOrder.keys()).sort(
+      (a, b) => (unitOrder.get(a) ?? 0) - (unitOrder.get(b) ?? 0)
     );
 
     const header = [
