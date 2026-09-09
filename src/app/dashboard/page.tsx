@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import StudentDashboard from "@/components/StudentDashboard";
 import StaffDashboard from "@/components/StaffDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
+import RegistrarDashboard from "@/components/RegistrarDashboard";
 import { clearSession } from "@/lib/api-client";
 
 export default function DashboardPage() {
@@ -66,7 +67,13 @@ export default function DashboardPage() {
     return <StaffDashboard user={user} onLogout={handleLogout} />;
   }
 
-  if (user?.role === "ADMIN" || user?.role === "REGISTRAR") {
+  // The Registrar is read-only and is not authorised for the admin-only audit
+  // log endpoint, so it gets its own monitoring view rather than the admin one.
+  if (user?.role === "REGISTRAR") {
+    return <RegistrarDashboard user={user} onLogout={handleLogout} />;
+  }
+
+  if (user?.role === "ADMIN") {
     return <AdminDashboard user={user} onLogout={handleLogout} />;
   }
 

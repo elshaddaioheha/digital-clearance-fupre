@@ -49,3 +49,6 @@ dev.db*
 
 # local file uploads
 /public/uploads/
+
+# local interface screenshots (not part of the repo)
+/public/screenshots/

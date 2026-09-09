@@ -32,19 +32,21 @@ interface Document {
 
 interface Submission {
   id: string;
-  studentId: string;
   status: string;
   submittedAt: string | null;
   reviewedAt: string | null;
   rejectionNote: string | null;
+  // Matches the flat shape returned by GET /api/units/[unitId]/submissions.
   student: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
     matricNumber: string;
     department: string;
     faculty: string;
-    user: {
-      name: string;
-      email: string;
-    };
+    level: string;
+    sessionOfGraduation: string;
   };
   documents: Document[];
 }
@@ -150,7 +152,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
   // Filter & Search table submissions
   const filteredSubmissions = submissions.filter(sub => {
-    const matchesSearch = sub.student.user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch = sub.student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           sub.student.matricNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           sub.student.department.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -465,10 +467,10 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
                             {/* Student Info */}
                             <td className="py-4 px-4">
                               <span className="block font-semibold text-sm text-slate-800">
-                                {sub.student.user.name}
+                                {sub.student.name}
                               </span>
                               <span className="block text-[10px] text-slate-400">
-                                {sub.student.matricNumber} / {sub.student.user.email}
+                                {sub.student.matricNumber} / {sub.student.email}
                               </span>
                             </td>
                             {/* Department */}

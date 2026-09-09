@@ -172,6 +172,19 @@ export default function LoginPage() {
               </div>
 
             </form>
+
+            <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+              <span className="text-xs text-slate-500 font-poppins">
+                New graduating student?{" "}
+                <button
+                  type="button"
+                  onClick={() => router.push("/register")}
+                  className="font-semibold text-[#3482B9] hover:underline cursor-pointer"
+                >
+                  Create an account
+                </button>
+              </span>
+            </div>
           </div>
 
           {/* Card Footer */}
