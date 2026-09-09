@@ -27,16 +27,16 @@ export async function verifyAuth(req: Request): Promise<{
   user: AuthenticatedUser | null;
   errorResponse: NextResponse | null;
 }> {
+  // Bearer header only. A `?token=` fallback used to exist for the certificate
+  // download, which meant a full access token could reach any endpoint through
+  // the URL — and query strings are recorded in server logs, proxies and
+  // browser history. The client now fetches that PDF with this header and hands
+  // the browser a blob instead.
   let token: string | null = null;
 
   const authHeader = req.headers.get("authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     token = authHeader.split(" ")[1];
-  } else {
-    try {
-      const url = new URL(req.url);
-      token = url.searchParams.get("token");
-    } catch (e) {}
   }
 
   if (!token) {

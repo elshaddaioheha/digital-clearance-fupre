@@ -267,7 +267,14 @@ async function runTests() {
 
     // Test 14: Verify Certificate Route Accessibility
     console.log("\nTest 14: Verifying digital clearance certificate PDF route...");
-    const certRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}?token=${studentToken}`);
+    // Authorization header only: the `?token=` form is gone, so that the access
+    // token never lands in a URL, a log or browser history.
+    const certUnauthRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}?token=${studentToken}`);
+    assert(certUnauthRes.status === 401, `Certificate via ?token= query param is rejected (got ${certUnauthRes.status})`);
+
+    const certRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}`, "GET", {
+      "Authorization": `Bearer ${studentToken}`
+    });
     assert(certRes.status === 200 || certRes.status === 400 || certRes.status === 403, `Certificate PDF endpoint responded with code ${certRes.status}`);
 
     // Final Report

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiFetch, readJson, errorMessage, getFreshToken } from "@/lib/api-client";
+import { apiFetch, readJson, errorMessage } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -108,6 +108,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [showToast, setShowToast] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [certificateLoading, setCertificateLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -274,12 +275,38 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   };
 
   const handleDownloadCertificate = async () => {
-    if (!profile) return;
-    // The PDF is fetched by the browser, not by apiFetch, so mint a fresh token
-    // first rather than handing over one that may have already expired.
-    const freshToken = await getFreshToken();
-    if (!freshToken) return;
-    window.open(`/api/certificates/${user.id}?token=${freshToken}`, "_blank");
+    if (!profile || certificateLoading) return;
+
+    setCertificateLoading(true);
+    try {
+      // Fetched with the Authorization header rather than opened with the token
+      // in the query string, so the access token never reaches the URL bar,
+      // browser history or the server's request log.
+      const response = await apiFetch(`/api/certificates/${user.id}`);
+
+      if (!response.ok) {
+        alert(await errorMessage(response, "Could not download your certificate"));
+        return;
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `Clearance_Certificate_${profile.matricNumber.replace(/\//g, "_")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      // Released on the next tick so the click has already been handled.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch (err) {
+      console.error("Certificate download error:", err);
+      alert("Could not download your certificate. Please try again.");
+    } finally {
+      setCertificateLoading(false);
+    }
   };
 
   const handleScrollToSection = (id: string) => {

@@ -103,7 +103,11 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="Clearance_Certificate_${student.matricNumber.toUpperCase()}.pdf"`,
+        // A matric number contains slashes (CSC/2021/001), which are not legal
+        // in a filename and make browsers truncate at the last one.
+        "Content-Disposition": `attachment; filename="Clearance_Certificate_${student.matricNumber
+          .toUpperCase()
+          .replace(/[^A-Z0-9._-]+/g, "_")}.pdf"`,
       },
     });
   } catch (error) {

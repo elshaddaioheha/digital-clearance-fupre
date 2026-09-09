@@ -129,17 +129,3 @@ export async function errorMessage(
   if (body?.error) return body.error;
   return `${fallback} (HTTP ${response.status})`;
 }
-
-/**
- * Returns a token known to be usable right now, refreshing first if the current
- * one is rejected. Needed for flows that hand the token to the browser rather
- * than to fetch, such as opening the certificate PDF in a new tab.
- */
-export async function getFreshToken(): Promise<string | null> {
-  // apiFetch cannot help here because the browser makes the request, so mint a
-  // new token up front rather than risk handing over one about to expire. If
-  // the refresh fails, fall back to whatever is stored and let the server rule
-  // on it.
-  const refreshed = await refreshAccessToken();
-  return refreshed ?? getStoredToken();
-}
