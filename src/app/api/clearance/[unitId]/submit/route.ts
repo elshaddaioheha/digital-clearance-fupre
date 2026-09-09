@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { Role, ClearanceStatus } from "@/lib/auth";
 import { requireRole } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { uploadFile, deleteFiles, StorageError } from "@/lib/storage";
+import { uploadFile, deleteFiles, resolveFileUrls, StorageError } from "@/lib/storage";
 import { createAuditLog } from "@/lib/audit";
 
 export async function POST(
@@ -222,9 +222,17 @@ export async function POST(
       },
     });
 
+    const signed = await resolveFileUrls(finalRequest.documents.map((d) => d.fileUrl));
+
     return NextResponse.json({
       message: "Clearance documents submitted successfully.",
-      clearanceRequest: finalRequest,
+      clearanceRequest: {
+        ...finalRequest,
+        documents: finalRequest.documents.map((d) => ({
+          ...d,
+          fileUrl: signed.get(d.fileUrl) ?? null,
+        })),
+      },
     });
   } catch (error: any) {
     console.error("Submit clearance error:", error);

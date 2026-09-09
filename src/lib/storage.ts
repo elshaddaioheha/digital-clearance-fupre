@@ -100,7 +100,22 @@ if (configError) {
 }
 
 /**
- * Persists a document and returns its retrievable URL.
+ * How long a generated signed URL stays valid. Long enough to click through
+ * from a dashboard, short enough that a copied link is not a lasting handle on
+ * a student's personal documents.
+ */
+const SIGNED_URL_TTL_SECONDS = 600;
+
+/** Marks a stored reference as an object in the Supabase bucket. */
+const REMOTE_PREFIX = "supabase:";
+
+/**
+ * Persists a document and returns a stored reference, NOT a fetchable URL.
+ *
+ * The bucket is private, so there is no durable public URL to keep. References
+ * take one of two forms and are resolved at read time by resolveFileUrls:
+ *   `supabase:<object name>`  an object in the private bucket
+ *   `/uploads/<file name>`    the local development fallback
  *
  * In production this throws StorageError rather than degrading: the old code
  * caught every storage failure, wrote to `public/uploads` and returned an HTTP
@@ -136,11 +151,7 @@ export async function uploadFile(
         );
       }
 
-      const { data: urlData } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(uniqueName);
-
-      return urlData.publicUrl;
+      return `${REMOTE_PREFIX}${uniqueName}`;
     } catch (err) {
       if (isProduction) throw err;
 
@@ -167,6 +178,85 @@ export async function uploadFile(
 }
 
 /**
+ * Extracts the bucket object name from a stored reference, or null when the
+ * reference does not point at the bucket.
+ *
+ * Handles the public URLs written before the bucket was made private, so old
+ * Document rows keep resolving and deleting correctly.
+ */
+function toObjectName(reference: string): string | null {
+  if (reference.startsWith(REMOTE_PREFIX)) {
+    return reference.slice(REMOTE_PREFIX.length);
+  }
+
+  // Legacy: .../object/public/<bucket>/<name>
+  if (reference.includes(`/${BUCKET_NAME}/`)) {
+    const name = reference.split(`/${BUCKET_NAME}/`).pop();
+    if (name) return decodeURIComponent(name.split("?")[0]);
+  }
+
+  return null;
+}
+
+/**
+ * Turns stored references into URLs a browser can actually fetch.
+ *
+ * Bucket objects get a short-lived signed URL; local development paths are
+ * already servable by Next and pass through untouched. Returns a map keyed by
+ * the original reference, and signs in one batched call rather than one request
+ * per document. A reference that cannot be signed is omitted, so callers should
+ * treat a missing entry as "not currently retrievable" rather than an error.
+ */
+export async function resolveFileUrls(
+  references: string[]
+): Promise<Map<string, string>> {
+  const resolved = new Map<string, string>();
+  if (references.length === 0) return resolved;
+
+  const unique = Array.from(new Set(references));
+  const remote = new Map<string, string>(); // object name -> original reference
+
+  for (const reference of unique) {
+    if (reference.startsWith("/uploads/")) {
+      resolved.set(reference, reference);
+      continue;
+    }
+
+    const objectName = toObjectName(reference);
+    if (objectName) {
+      remote.set(objectName, reference);
+    }
+  }
+
+  if (supabase && remote.size > 0) {
+    try {
+      const names = Array.from(remote.keys());
+      const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .createSignedUrls(names, SIGNED_URL_TTL_SECONDS);
+
+      if (error) throw new Error(error.message);
+
+      for (const entry of data || []) {
+        // createSignedUrls reports per-object failures inline rather than throwing
+        if (!entry.signedUrl || entry.error) continue;
+
+        const reference = remote.get(entry.path || "");
+        if (reference) resolved.set(reference, entry.signedUrl);
+      }
+    } catch (err) {
+      console.warn(
+        `[storage] Could not sign ${remote.size} document URL(s): ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
+  return resolved;
+}
+
+/**
  * Best-effort removal of previously stored files.
  *
  * Resubmitting replaces a request's Document rows, which used to leave the
@@ -183,11 +273,11 @@ export async function deleteFiles(fileUrls: string[]): Promise<void> {
   for (const url of fileUrls) {
     if (url.startsWith("/uploads/")) {
       localNames.push(url.slice("/uploads/".length));
-    } else if (url.includes(`/${BUCKET_NAME}/`)) {
-      // Public URLs look like .../object/public/<bucket>/<name>
-      const name = url.split(`/${BUCKET_NAME}/`).pop();
-      if (name) remoteNames.push(decodeURIComponent(name.split("?")[0]));
+      continue;
     }
+
+    const objectName = toObjectName(url);
+    if (objectName) remoteNames.push(objectName);
   }
 
   if (supabase && remoteNames.length > 0) {

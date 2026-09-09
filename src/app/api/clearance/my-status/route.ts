@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Role, ClearanceStatus } from "@/lib/auth";
 import { requireRole } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { resolveFileUrls } from "@/lib/storage";
 
 export async function GET(req: Request) {
   try {
@@ -63,8 +64,20 @@ export async function GET(req: Request) {
       },
     });
 
+    // The bucket is private, so stored references are turned into short-lived
+    // signed URLs here rather than being handed out as durable links.
+    const signed = await resolveFileUrls(
+      requests.flatMap((r) => r.documents.map((d) => d.fileUrl))
+    );
+
     return NextResponse.json({
-      clearanceRequests: requests,
+      clearanceRequests: requests.map((r) => ({
+        ...r,
+        documents: r.documents.map((d) => ({
+          ...d,
+          fileUrl: signed.get(d.fileUrl) ?? null,
+        })),
+      })),
     });
   } catch (error) {
     console.error("Fetch clearance status error:", error);

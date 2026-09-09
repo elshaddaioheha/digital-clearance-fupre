@@ -25,7 +25,7 @@ import {
 interface Document {
   id: string;
   fileName: string;
-  fileUrl: string;
+  fileUrl: string | null;
   checksum: string;
   uploadedAt: string;
 }
@@ -477,7 +477,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
                             </td>
                             {/* Submission File */}
                             <td className="py-4 px-4 text-center">
-                              {file ? (
+                              {file?.fileUrl ? (
                                 <a
                                   href={file.fileUrl}
                                   target="_blank"
@@ -487,7 +487,9 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
                                   <Eye className="w-3.5 h-3.5" /> View Doc
                                 </a>
                               ) : (
-                                <span className="text-slate-400 italic text-[11px]">No file</span>
+                                <span className="text-slate-400 italic text-[11px]">
+                                  {file ? "Unavailable" : "No file"}
+                                </span>
                               )}
                             </td>
                             {/* Status */}
