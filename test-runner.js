@@ -121,14 +121,112 @@ async function runTests() {
 
     const staffToken = staffLoginRes.body.accessToken;
 
-    console.log("\nTest 6: Staff fetching staff profile & assigned unit...");
-    const staffInfoRes = await makeRequest(`${APP_URL}/api/admin/staff`, "GET", {
+    console.log("\nTest 6: Staff fetching own profile & assigned unit...");
+    const staffInfoRes = await makeRequest(`${APP_URL}/api/staff/me`, "GET", {
       "Authorization": `Bearer ${staffToken}`
     });
-    assert(staffInfoRes.status === 200, `Fetching staff info returned status 200 (got ${staffInfoRes.status})`);
+    assert(staffInfoRes.status === 200, `Fetching own staff profile returned status 200 (got ${staffInfoRes.status})`);
 
-    // Test 7: Admin Login & Full System Overview
-    console.log("\nTest 7: Logging in Admin...");
+    const assignedUnit = staffInfoRes.body.assignments?.[0];
+    assert(assignedUnit?.unitName === "Head of Department", `Staff is assigned to 'Head of Department' (got '${assignedUnit?.unitName}')`);
+
+    // The full staff directory exposes every colleague's contact details and is
+    // admin-only; a staff account must not be able to read it.
+    const staffDirectoryRes = await makeRequest(`${APP_URL}/api/admin/staff`, "GET", {
+      "Authorization": `Bearer ${staffToken}`
+    });
+    assert(staffDirectoryRes.status === 403, `Staff reading the full staff directory is forbidden (got ${staffDirectoryRes.status})`);
+
+    // Test 7: Student submits clearance documents
+    console.log("\nTest 7: Student submitting clearance documents...");
+    const hodUnit = statusRes.body.clearanceRequests.find((r) => r.clearingUnit.name === "Head of Department");
+
+    const submitForm = new FormData();
+    submitForm.append(
+      "files",
+      new Blob([Buffer.from("%PDF-1.4\ntrailer<</Root 1 0 R>>\n%%EOF")], { type: "application/pdf" }),
+      "registration-file.pdf"
+    );
+
+    const submitRes = await fetch(`${APP_URL}/api/clearance/${hodUnit.unitId}/submit`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${studentToken}` },
+      body: submitForm,
+    });
+    const submitBody = await submitRes.json();
+
+    assert(submitRes.status === 200, `Document submission returned status 200 (got ${submitRes.status})`);
+    assert(submitBody.clearanceRequest?.status === "PENDING_REVIEW", `Unit moved to 'PENDING_REVIEW' (got '${submitBody.clearanceRequest?.status}')`);
+    assert(submitBody.clearanceRequest?.documents?.length === 1, `One document was stored (got ${submitBody.clearanceRequest?.documents?.length})`);
+    assert(/^[a-f0-9]{64}$/.test(submitBody.clearanceRequest?.documents?.[0]?.checksum || ""), "Server recorded a SHA-256 checksum for the document");
+
+    const hodRequestId = submitBody.clearanceRequest.id;
+
+    // Test 8: Sequential clearance gate
+    console.log("\nTest 8: Enforcing sequential clearance order...");
+    const libraryUnit = statusRes.body.clearanceRequests.find((r) => r.clearingUnit.name === "University Library");
+
+    const skipForm = new FormData();
+    skipForm.append(
+      "files",
+      new Blob([Buffer.from("%PDF-1.4\n%%EOF")], { type: "application/pdf" }),
+      "library.pdf"
+    );
+
+    const skipRes = await fetch(`${APP_URL}/api/clearance/${libraryUnit.unitId}/submit`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${studentToken}` },
+      body: skipForm,
+    });
+    const skipBody = await skipRes.json();
+
+    assert(skipRes.status === 400, `Submitting out of sequence is rejected (got ${skipRes.status})`);
+    assert(/Sequential clearance required/.test(skipBody.error || ""), "Rejection names the sequential clearance rule");
+
+    // Test 9: Review guards
+    console.log("\nTest 9: Enforcing review guards...");
+    const anonApproveRes = await makeRequest(`${APP_URL}/api/submissions/${hodRequestId}/approve`, "PATCH");
+    assert(anonApproveRes.status === 401, `Approving without a token is unauthorized (got ${anonApproveRes.status})`);
+
+    // Authenticated but nonexistent: proves the 401 above is not leaking record existence
+    const missingApproveRes = await makeRequest(`${APP_URL}/api/submissions/00000000-0000-0000-0000-000000000000/approve`, "PATCH", {
+      "Authorization": `Bearer ${staffToken}`
+    });
+    assert(missingApproveRes.status === 404, `Approving a nonexistent request returns 404 (got ${missingApproveRes.status})`);
+
+    const collegeLoginRes = await makeRequest(`${APP_URL}/api/auth/login`, "POST", {}, {
+      email: "college_staff@fupre.edu.ng",
+      password: "collegepassword"
+    });
+    const collegeToken = collegeLoginRes.body.accessToken;
+
+    const crossUnitRes = await makeRequest(`${APP_URL}/api/submissions/${hodRequestId}/approve`, "PATCH", {
+      "Authorization": `Bearer ${collegeToken}`
+    });
+    assert(crossUnitRes.status === 403, `Staff cannot approve another unit's request (got ${crossUnitRes.status})`);
+
+    const collegeUnitReq = statusRes.body.clearanceRequests.find((r) => r.clearingUnit.name === "College");
+    const unsubmittedRes = await makeRequest(`${APP_URL}/api/submissions/${collegeUnitReq.id}/approve`, "PATCH", {
+      "Authorization": `Bearer ${collegeToken}`
+    });
+    assert(unsubmittedRes.status === 409, `Approving a request with no submitted documents is refused (got ${unsubmittedRes.status})`);
+
+    // Test 10: Staff approves the submitted request
+    console.log("\nTest 10: Staff approving submitted clearance request...");
+    const approveRes = await makeRequest(`${APP_URL}/api/submissions/${hodRequestId}/approve`, "PATCH", {
+      "Authorization": `Bearer ${staffToken}`
+    });
+
+    assert(approveRes.status === 200, `Approval returned status 200 (got ${approveRes.status})`);
+    assert(approveRes.body.clearanceRequest?.status === "APPROVED", `Unit status is 'APPROVED' (got '${approveRes.body.clearanceRequest?.status}')`);
+
+    const reApproveRes = await makeRequest(`${APP_URL}/api/submissions/${hodRequestId}/approve`, "PATCH", {
+      "Authorization": `Bearer ${staffToken}`
+    });
+    assert(reApproveRes.status === 409, `Re-approving an already decided request is refused (got ${reApproveRes.status})`);
+
+    // Test 11: Admin Login & Full System Overview
+    console.log("\nTest 11: Logging in Admin...");
     const adminLoginRes = await makeRequest(`${APP_URL}/api/auth/login`, "POST", {}, {
       email: "admin@fupre.edu.ng",
       password: "adminpassword"
@@ -139,8 +237,8 @@ async function runTests() {
 
     const adminToken = adminLoginRes.body.accessToken;
 
-    // Test 8: Admin List Students & Audit Logs
-    console.log("\nTest 8: Admin fetching students directory & system audit logs...");
+    // Test 12: Admin List Students & Audit Logs
+    console.log("\nTest 12: Admin fetching students directory & system audit logs...");
     const studentsRes = await makeRequest(`${APP_URL}/api/admin/students`, "GET", {
       "Authorization": `Bearer ${adminToken}`
     });
@@ -153,9 +251,9 @@ async function runTests() {
     });
     assert(auditRes.status === 200, `Admin audit logs endpoint returned status 200 (got ${auditRes.status})`);
 
-    // Test 9: Admin Manual Override Test
+    // Test 13: Admin Manual Override Test
     if (firstReq) {
-      console.log("\nTest 9: Admin manual override of clearance unit...");
+      console.log("\nTest 13: Admin manual override of clearance unit...");
       const overrideRes = await makeRequest(`${APP_URL}/api/admin/clearance/${firstReq.id}/override`, "POST", {
         "Authorization": `Bearer ${adminToken}`
       }, {
@@ -167,9 +265,16 @@ async function runTests() {
       assert(overrideRes.body.clearanceRequest?.status === "APPROVED", `Unit status overridden to 'APPROVED'`);
     }
 
-    // Test 10: Verify Certificate Route Accessibility
-    console.log("\nTest 10: Verifying digital clearance certificate PDF route...");
-    const certRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}?token=${studentToken}`);
+    // Test 14: Verify Certificate Route Accessibility
+    console.log("\nTest 14: Verifying digital clearance certificate PDF route...");
+    // Authorization header only: the `?token=` form is gone, so that the access
+    // token never lands in a URL, a log or browser history.
+    const certUnauthRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}?token=${studentToken}`);
+    assert(certUnauthRes.status === 401, `Certificate via ?token= query param is rejected (got ${certUnauthRes.status})`);
+
+    const certRes = await makeRequest(`${APP_URL}/api/certificates/${studentUserId}`, "GET", {
+      "Authorization": `Bearer ${studentToken}`
+    });
     assert(certRes.status === 200 || certRes.status === 400 || certRes.status === 403, `Certificate PDF endpoint responded with code ${certRes.status}`);
 
     // Final Report
@@ -195,8 +300,15 @@ async function main() {
     stdio: "inherit",
   });
 
-  console.log("Waiting 20 seconds for Next.js to start up...");
-  await sleep(20000);
+  // A fixed sleep is a coin flip: a cold Turbopack compile regularly needs more
+  // than 20 seconds, and the whole suite then fails with ECONNREFUSED. Poll
+  // until the server actually answers instead.
+  const ready = await waitForServer(`${APP_URL}/api/students/me`, 120000);
+  if (!ready) {
+    console.error("Dev server did not become ready in time.");
+    await stopDevServer(devServerProcess);
+    process.exit(1);
+  }
 
   let success = false;
   try {
@@ -206,14 +318,73 @@ async function main() {
   } finally {
     console.log("Shutting down Next.js Dev Server...");
     if (devServerProcess) {
-      devServerProcess.kill("SIGTERM");
-      try {
-        spawn("taskkill", ["/pid", devServerProcess.pid, "/f", "/t"]);
-      } catch (e) {}
+      await stopDevServer(devServerProcess);
     }
   }
 
   process.exit(success ? 0 : 1);
+}
+
+/**
+ * Polls an endpoint until the server responds at all. Any HTTP status counts as
+ * ready — a 401 from an authenticated route means routing is live, which is all
+ * we need before the first test runs.
+ */
+async function waitForServer(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let reported = false;
+
+  while (Date.now() < deadline) {
+    try {
+      await makeRequest(url);
+      return true;
+    } catch (e) {
+      if (!reported) {
+        console.log("Waiting for Next.js to start up...");
+        reported = true;
+      }
+      await sleep(1000);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Stops the dev server and waits for it to actually be gone.
+ *
+ * `npx next dev` runs Next in a grandchild process, so on Windows a SIGTERM to
+ * the npx wrapper leaves the real server holding port 3000 and the inherited
+ * stdio pipe. The old code fired taskkill without awaiting it and then called
+ * process.exit immediately, so the server routinely outlived the test run.
+ */
+function stopDevServer(child) {
+  return new Promise((resolve) => {
+    // Never hang the run on a kill that misbehaves.
+    const bail = setTimeout(resolve, 10000);
+    bail.unref?.();
+
+    const done = () => {
+      clearTimeout(bail);
+      resolve();
+    };
+
+    if (process.platform === "win32") {
+      try {
+        const killer = spawn("taskkill", ["/pid", child.pid, "/f", "/t"], {
+          stdio: "ignore",
+        });
+        killer.on("exit", done);
+        killer.on("error", done);
+      } catch (e) {
+        done();
+      }
+      return;
+    }
+
+    child.on("exit", done);
+    child.kill("SIGTERM");
+  });
 }
 
 main();

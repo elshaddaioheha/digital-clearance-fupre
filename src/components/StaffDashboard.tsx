@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, readJson, errorMessage } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -24,26 +25,28 @@ import {
 interface Document {
   id: string;
   fileName: string;
-  fileUrl: string;
+  fileUrl: string | null;
   checksum: string;
   uploadedAt: string;
 }
 
 interface Submission {
   id: string;
-  studentId: string;
   status: string;
   submittedAt: string | null;
   reviewedAt: string | null;
   rejectionNote: string | null;
+  // Matches the flat shape returned by GET /api/units/[unitId]/submissions.
   student: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
     matricNumber: string;
     department: string;
     faculty: string;
-    user: {
-      name: string;
-      email: string;
-    };
+    level: string;
+    sessionOfGraduation: string;
   };
   documents: Document[];
 }
@@ -70,27 +73,20 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
   const [filterStatus, setFilterStatus] = useState("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
-
   const fetchSubmissions = async () => {
     try {
-      const staffRes = await fetch("/api/admin/staff", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const staffData = await staffRes.json();
-      
-      const currentStaff = staffData.staff?.find((s: any) => s.userId === user.id);
-      const assignedUnit = currentStaff?.assignments?.[0]?.clearingUnit;
+      const staffRes = await apiFetch("/api/staff/me");
+      const staffData = await readJson(staffRes);
+
+      const assignedUnit = staffData?.assignments?.[0];
 
       if (assignedUnit) {
-        setUnitName(assignedUnit.name);
-        setUnitId(assignedUnit.id);
-        
-        const subRes = await fetch(`/api/units/${assignedUnit.id}/submissions`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        const subData = await subRes.json();
-        setSubmissions(subData.submissions || []);
+        setUnitName(assignedUnit.unitName);
+        setUnitId(assignedUnit.unitId);
+
+        const subRes = await apiFetch(`/api/units/${assignedUnit.unitId}/submissions`);
+        const subData = await readJson(subRes);
+        setSubmissions(subData?.submissions || []);
       }
     } catch (e) {
       console.error("Error loading staff review queue:", e);
@@ -100,27 +96,22 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
   };
 
   useEffect(() => {
-    if (token) {
-      fetchSubmissions();
-    }
-  }, [token]);
+    fetchSubmissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleApprove = async (requestId: string) => {
     if (!confirm("Are you sure you want to approve this student's clearance request?")) return;
     setActionLoading(requestId);
 
     try {
-      const res = await fetch(`/api/submissions/${requestId}/approve`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
+      const res = await apiFetch(`/api/submissions/${requestId}/approve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" }
       });
-      
-      const resData = await res.json();
+
       if (!res.ok) {
-        throw new Error(resData.error || "Approval failed");
+        throw new Error(await errorMessage(res, "Approval failed"));
       }
 
       fetchSubmissions();
@@ -139,18 +130,14 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
     setActionLoading(requestId);
 
     try {
-      const res = await fetch(`/api/submissions/${requestId}/reject`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
+      const res = await apiFetch(`/api/submissions/${requestId}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rejectionNote })
       });
-      
-      const resData = await res.json();
+
       if (!res.ok) {
-        throw new Error(resData.error || "Rejection failed");
+        throw new Error(await errorMessage(res, "Rejection failed"));
       }
 
       setRejectingRequest(null);
@@ -165,7 +152,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
 
   // Filter & Search table submissions
   const filteredSubmissions = submissions.filter(sub => {
-    const matchesSearch = sub.student.user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch = sub.student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           sub.student.matricNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           sub.student.department.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -480,10 +467,10 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
                             {/* Student Info */}
                             <td className="py-4 px-4">
                               <span className="block font-semibold text-sm text-slate-800">
-                                {sub.student.user.name}
+                                {sub.student.name}
                               </span>
                               <span className="block text-[10px] text-slate-400">
-                                {sub.student.matricNumber} / {sub.student.user.email}
+                                {sub.student.matricNumber} / {sub.student.email}
                               </span>
                             </td>
                             {/* Department */}
@@ -492,7 +479,7 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
                             </td>
                             {/* Submission File */}
                             <td className="py-4 px-4 text-center">
-                              {file ? (
+                              {file?.fileUrl ? (
                                 <a
                                   href={file.fileUrl}
                                   target="_blank"
@@ -502,7 +489,9 @@ export default function StaffDashboard({ user, onLogout }: StaffDashboardProps) 
                                   <Eye className="w-3.5 h-3.5" /> View Doc
                                 </a>
                               ) : (
-                                <span className="text-slate-400 italic text-[11px]">No file</span>
+                                <span className="text-slate-400 italic text-[11px]">
+                                  {file ? "Unavailable" : "No file"}
+                                </span>
                               )}
                             </td>
                             {/* Status */}

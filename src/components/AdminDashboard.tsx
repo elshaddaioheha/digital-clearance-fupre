@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, readJson, errorMessage } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -23,6 +24,7 @@ import {
   Check,
   AlertTriangle,
   Loader2,
+  Layers,
   ArrowRight
 } from "lucide-react";
 
@@ -57,10 +59,19 @@ interface AuditLog {
   entityId: string | null;
   metadata: any;
   timestamp: string;
-  actor?: {
-    email: string;
-    name: string;
-  };
+  // Flattened by GET /api/admin/audit-logs, which already applies its own
+  // "System/Unknown" fallback for entries with no actor.
+  actorName: string;
+  actorEmail: string;
+}
+
+interface ClearingUnit {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  _count?: { assignments: number; requests: number };
 }
 
 interface AdminDashboardProps {
@@ -77,7 +88,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [students, setStudents] = useState<Student[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"students" | "audit">("students");
+  const [activeTab, setActiveTab] = useState<"students" | "audit" | "units">("students");
+  const [units, setUnits] = useState<ClearingUnit[]>([]);
+  const [newUnitName, setNewUnitName] = useState("");
+  const [newUnitDescription, setNewUnitDescription] = useState("");
+  const [newUnitOrder, setNewUnitOrder] = useState("");
+  const [unitSaving, setUnitSaving] = useState(false);
+  const [unitError, setUnitError] = useState("");
+  const [togglingUnitId, setTogglingUnitId] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [overrideRequest, setOverrideRequest] = useState<any | null>(null);
   const [overrideNote, setOverrideNote] = useState("");
@@ -86,21 +104,19 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [filterStatus, setFilterStatus] = useState("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
-
   const fetchAdminData = async () => {
     try {
-      const studentRes = await fetch("/api/admin/students", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const studentData = await studentRes.json();
-      setStudents(studentData.students || []);
+      const studentRes = await apiFetch("/api/admin/students");
+      const studentData = await readJson(studentRes);
+      setStudents(studentData?.students || []);
 
-      const logsRes = await fetch("/api/admin/audit-logs", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const logsData = await logsRes.json();
-      setAuditLogs(logsData.auditLogs || []);
+      const logsRes = await apiFetch("/api/admin/audit-logs");
+      const logsData = await readJson(logsRes);
+      setAuditLogs(logsData?.auditLogs || []);
+
+      const unitsRes = await apiFetch("/api/admin/units");
+      const unitsData = await readJson(unitsRes);
+      setUnits(unitsData?.units || []);
     } catch (e) {
       console.error("Error fetching admin dashboard records:", e);
     } finally {
@@ -109,10 +125,64 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   };
 
   useEffect(() => {
-    if (token) {
-      fetchAdminData();
+    fetchAdminData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCreateUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnitName.trim()) return;
+
+    setUnitSaving(true);
+    setUnitError("");
+    try {
+      const res = await apiFetch("/api/admin/units", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newUnitName.trim(),
+          description: newUnitDescription.trim() || undefined,
+          // Blank means "append": the API works out the next position.
+          sortOrder: newUnitOrder.trim() ? Number(newUnitOrder.trim()) : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await errorMessage(res, "Could not create the clearing unit"));
+      }
+
+      setNewUnitName("");
+      setNewUnitDescription("");
+      setNewUnitOrder("");
+      await fetchAdminData();
+    } catch (err) {
+      setUnitError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setUnitSaving(false);
     }
-  }, [token]);
+  };
+
+  const handleToggleUnit = async (unit: ClearingUnit) => {
+    setTogglingUnitId(unit.id);
+    setUnitError("");
+    try {
+      const res = await apiFetch(`/api/admin/units/${unit.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !unit.isActive }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await errorMessage(res, "Could not update the clearing unit"));
+      }
+
+      await fetchAdminData();
+    } catch (err) {
+      setUnitError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setTogglingUnitId(null);
+    }
+  };
 
   const handleOverrideSubmit = async (e: React.FormEvent, forceStatus: "APPROVED" | "REJECTED") => {
     e.preventDefault();
@@ -120,21 +190,17 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
     setOverrideLoading(true);
     try {
-      const res = await fetch(`/api/admin/clearance/${overrideRequest.id}/override`, {
+      const res = await apiFetch(`/api/admin/clearance/${overrideRequest.id}/override`, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           status: forceStatus, 
           justification: overrideNote 
         })
       });
 
-      const resData = await res.json();
       if (!res.ok) {
-        throw new Error(resData.error || "Override request failed");
+        throw new Error(await errorMessage(res, "Override request failed"));
       }
 
       setOverrideRequest(null);
@@ -330,6 +396,20 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                 </button>
                 
                 <button 
+                  onClick={() => { setActiveTab("units"); setMobileMenuOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg transition-all font-poppins font-medium text-xs text-left cursor-pointer ${
+                    activeTab === "units"
+                      ? "bg-[#3482B9] text-white"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Layers className="w-4 h-4" />
+                    <span>Clearing Units</span>
+                  </div>
+                </button>
+
+                <button 
                   onClick={() => { setActiveTab("audit"); setMobileMenuOpen(false); }}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg transition-all font-poppins font-medium text-xs text-left cursor-pointer ${
                     activeTab === "audit" 
@@ -379,14 +459,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         <div className="flex flex-col gap-2 mt-2">
           <h1 className="font-poppins font-bold text-xl sm:text-2xl text-slate-800">
             <span className="block text-[10px] sm:text-xs text-[#3482B9] uppercase tracking-wider mb-1">DSCS Admin Portal</span>
-            {activeTab === "students" ? "Graduating Students Directory" : "System Audit Logs"}
+            {activeTab === "students" ? "Graduating Students Directory" : activeTab === "units" ? "Clearing Unit Management" : "System Audit Logs"}
           </h1>
           
           <div className="bg-[#E2E8F0] px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 flex items-center gap-2 border border-slate-300/40">
             <LayoutDashboard className="w-4 h-4 text-slate-500 shrink-0" />
             <span>Home</span>
             <span className="text-slate-400 font-normal">&gt;</span>
-            <span className="text-slate-500 font-normal">{activeTab === "students" ? "Students" : "Audit Logs"}</span>
+            <span className="text-slate-500 font-normal">{activeTab === "students" ? "Students" : activeTab === "units" ? "Clearing Units" : "Audit Logs"}</span>
           </div>
         </div>
 
@@ -560,6 +640,131 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                   </div>
                 </div>
               </div>
+            ) : activeTab === "units" ? (
+              /* Clearing Unit Management Tab */
+              <div>
+                <div className="mb-6 px-2">
+                  <h3 className="font-poppins font-semibold text-xl text-slate-800">
+                    Clearing Units
+                  </h3>
+                  <span className="text-xs text-[#3482B9] font-poppins font-semibold">
+                    {units.filter(u => u.isActive).length} active of {units.length} configured
+                  </span>
+                </div>
+
+                {/* Create unit */}
+                <form onSubmit={handleCreateUnit} className="mb-6 px-2">
+                  <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 font-poppins">
+                    <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">
+                      Add a clearing unit
+                    </span>
+
+                    {unitError && (
+                      <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-[11px] text-red-600 font-semibold">
+                        {unitError}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <input
+                        value={newUnitName}
+                        onChange={(e) => setNewUnitName(e.target.value)}
+                        placeholder="Unit name (e.g. Alumni Relations)"
+                        className="sm:col-span-5 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#3482B9] transition-all"
+                      />
+                      <input
+                        value={newUnitDescription}
+                        onChange={(e) => setNewUnitDescription(e.target.value)}
+                        placeholder="Requirements (optional)"
+                        className="sm:col-span-4 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#3482B9] transition-all"
+                      />
+                      <input
+                        value={newUnitOrder}
+                        onChange={(e) => setNewUnitOrder(e.target.value)}
+                        placeholder="Order"
+                        inputMode="numeric"
+                        className="sm:col-span-1 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#3482B9] transition-all"
+                      />
+                      <button
+                        type="submit"
+                        disabled={unitSaving || !newUnitName.trim()}
+                        className="sm:col-span-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#3482B9] hover:bg-[#2a6996] text-white text-xs font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {unitSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Add Unit"}
+                      </button>
+                    </div>
+                    <span className="block mt-2 text-[10px] text-slate-400">
+                      Order sets the position in the sequential clearance chain. Leave blank to append to the end.
+                    </span>
+                  </div>
+                </form>
+
+                <div className="overflow-x-auto rounded-lg border border-slate-100">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold text-slate-400 font-poppins">
+                        <th className="py-3 px-4 w-16">Order</th>
+                        <th className="py-3 px-4">Clearing Unit</th>
+                        <th className="py-3 px-4">Officers</th>
+                        <th className="py-3 px-4">Requests</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-poppins text-xs font-medium text-[#292D32]">
+                      {units.length > 0 ? (
+                        units.map((unit) => (
+                          <tr key={unit.id} className="hover:bg-slate-50/55 transition-all">
+                            <td className="py-3 px-4">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-100 border border-slate-200 font-bold text-[11px] text-slate-600">
+                                {unit.sortOrder}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="block font-semibold text-slate-800">{unit.name}</span>
+                              {unit.description && (
+                                <span className="block text-[10px] text-slate-400 truncate max-w-[280px]">
+                                  {unit.description.split("\n")[0]}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-slate-500">{unit._count?.assignments ?? 0}</td>
+                            <td className="py-3 px-4 text-slate-500">{unit._count?.requests ?? 0}</td>
+                            <td className="py-3 px-4">
+                              <span className={`inline-block border rounded-md px-2.5 py-1 text-[10px] font-semibold w-20 text-center ${
+                                unit.isActive
+                                  ? "bg-green-50 border-green-300 text-green-700"
+                                  : "bg-slate-100 border-slate-300 text-slate-500"
+                              }`}>
+                                {unit.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                onClick={() => handleToggleUnit(unit)}
+                                disabled={togglingUnitId === unit.id}
+                                className="text-[11px] font-semibold text-[#3482B9] hover:underline cursor-pointer disabled:opacity-50"
+                              >
+                                {togglingUnitId === unit.id
+                                  ? "Saving..."
+                                  : unit.isActive
+                                  ? "Deactivate"
+                                  : "Activate"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="py-12 px-4 text-center text-slate-400">
+                            No clearing units configured yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             ) : (
               /* Audit Logs Tab */
               <div>
@@ -592,10 +797,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                             </td>
                             <td className="py-3 px-4">
                               <span className="block font-semibold text-slate-800">
-                                {log.actor?.name || "System Process"}
+                                {log.actorName || "System Process"}
                               </span>
                               <span className="block text-[9px] text-slate-400">
-                                Role: {log.actorRole}
+                                {log.actorEmail} · {log.actorRole}
                               </span>
                             </td>
                             <td className="py-3 px-4 font-mono text-[10px] font-bold text-blue-700 uppercase">

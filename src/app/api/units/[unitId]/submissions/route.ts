@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Role, ClearanceStatus } from "@/lib/auth";
 import { requireUnitAccess } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { resolveFileUrls } from "@/lib/storage";
 
 export async function GET(
   req: Request,
@@ -75,6 +76,10 @@ export async function GET(
       },
     });
 
+    const signed = await resolveFileUrls(
+      submissions.flatMap((sub) => sub.documents.map((d) => d.fileUrl))
+    );
+
     return NextResponse.json({
       submissions: submissions.map((sub) => ({
         id: sub.id,
@@ -82,7 +87,10 @@ export async function GET(
         submittedAt: sub.submittedAt,
         reviewedAt: sub.reviewedAt,
         rejectionNote: sub.rejectionNote,
-        documents: sub.documents,
+        documents: sub.documents.map((d) => ({
+          ...d,
+          fileUrl: signed.get(d.fileUrl) ?? null,
+        })),
         student: {
           id: sub.student.userId,
           name: sub.student.user.name,

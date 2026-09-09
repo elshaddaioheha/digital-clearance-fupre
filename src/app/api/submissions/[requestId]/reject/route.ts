@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Role, ClearanceStatus } from "@/lib/auth";
-import { requireUnitAccess } from "@/lib/auth";
+import { requireRole, checkUnitAccess } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 
@@ -11,7 +11,16 @@ export async function PATCH(
   try {
     const { requestId } = await props.params;
 
-    // 1. Parse body and validate rejectionNote
+    // 1. Authenticate before reading the body or the database, so an anonymous
+    // caller cannot tell an existing request ID from a missing one.
+    const { user, errorResponse } = await requireRole(req, [Role.STAFF, Role.ADMIN]);
+    if (errorResponse) return errorResponse;
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Parse body and validate rejectionNote
     const body = await req.json();
     const { rejectionNote } = body;
 
@@ -22,7 +31,7 @@ export async function PATCH(
       );
     }
 
-    // 2. Fetch the request to verify unit ID
+    // 3. Load the request, then authorize the reviewer against its unit.
     const clearanceRequest = await prisma.clearanceRequest.findUnique({
       where: { id: requestId },
       include: {
@@ -42,18 +51,31 @@ export async function PATCH(
       );
     }
 
-    // 3. Unit-level access check
-    const { user, errorResponse } = await requireUnitAccess(
-      req,
-      clearanceRequest.unitId
-    );
-    if (errorResponse) return errorResponse;
+    const accessError = await checkUnitAccess(user, clearanceRequest.unitId);
+    if (accessError) return accessError;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 4. State Guard: only a request the student has actually submitted may be
+    // reviewed. Blocks rejecting NOT_SUBMITTED requests and re-reviewing one
+    // that was already decided.
+    const reviewableStatuses: string[] = [
+      ClearanceStatus.PENDING_REVIEW,
+      ClearanceStatus.UNDER_REVIEW,
+    ];
+
+    if (!reviewableStatuses.includes(clearanceRequest.status)) {
+      return NextResponse.json(
+        {
+          error:
+            clearanceRequest.status === ClearanceStatus.NOT_SUBMITTED
+              ? "Conflict: This student has not submitted any documents for this unit yet."
+              : `Conflict: This request has already been reviewed (${clearanceRequest.status}) and cannot be rejected again.`,
+          currentStatus: clearanceRequest.status,
+        },
+        { status: 409 }
+      );
     }
 
-    // 4. Update request status to REJECTED in transaction
+    // 5. Update request status to REJECTED in transaction
     const updatedRequest = await prisma.$transaction(async (tx) => {
       const updated = await tx.clearanceRequest.update({
         where: { id: requestId },
@@ -77,7 +99,7 @@ export async function PATCH(
       return updated;
     });
 
-    // 5. Audit Log
+    // 6. Audit Log
     await createAuditLog({
       actorId: user.userId,
       actorRole: user.role as Role,

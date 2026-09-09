@@ -27,16 +27,16 @@ export async function verifyAuth(req: Request): Promise<{
   user: AuthenticatedUser | null;
   errorResponse: NextResponse | null;
 }> {
+  // Bearer header only. A `?token=` fallback used to exist for the certificate
+  // download, which meant a full access token could reach any endpoint through
+  // the URL — and query strings are recorded in server logs, proxies and
+  // browser history. The client now fetches that PDF with this header and hands
+  // the browser a blob instead.
   let token: string | null = null;
 
   const authHeader = req.headers.get("authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     token = authHeader.split(" ")[1];
-  } else {
-    try {
-      const url = new URL(req.url);
-      token = url.searchParams.get("token");
-    } catch (e) {}
   }
 
   if (!token) {
@@ -112,7 +112,46 @@ export async function requireRole(
 }
 
 /**
+ * Authorizes an already-authenticated reviewer against one clearing unit.
+ * Returns an error response when access is denied, or null when allowed.
+ *
+ * Kept separate from authentication so a route whose unit ID is only known
+ * after a database lookup can authenticate first and query second. Doing it the
+ * other way round lets an anonymous caller probe which record IDs exist by
+ * telling 404 apart from 401.
+ */
+export async function checkUnitAccess(
+  user: AuthenticatedUser,
+  unitId: string
+): Promise<NextResponse | null> {
+  // Admins bypass unit checks
+  if (user.role === Role.ADMIN) {
+    return null;
+  }
+
+  const assignment = await prisma.staffUnitAssignment.findUnique({
+    where: {
+      staffId_unitId: {
+        staffId: user.userId,
+        unitId: unitId,
+      },
+    },
+  });
+
+  if (!assignment) {
+    return NextResponse.json(
+      { error: "Forbidden: You are not assigned to manage this clearing unit." },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
+
+/**
  * Ensures the user is a staff member and is assigned to the specified clearing unit.
+ * Use this when the unit ID comes straight from the URL; when it has to be read
+ * from the database first, use requireRole followed by checkUnitAccess.
  */
 export async function requireUnitAccess(
   req: Request,
@@ -133,29 +172,9 @@ export async function requireUnitAccess(
     };
   }
 
-  // Admins bypass unit checks
-  if (user.role === Role.ADMIN) {
-    return { user, errorResponse: null };
-  }
-
-  // Check assignment
-  const assignment = await prisma.staffUnitAssignment.findUnique({
-    where: {
-      staffId_unitId: {
-        staffId: user.userId,
-        unitId: unitId,
-      },
-    },
-  });
-
-  if (!assignment) {
-    return {
-      user: null,
-      errorResponse: NextResponse.json(
-        { error: "Forbidden: You are not assigned to manage this clearing unit." },
-        { status: 403 }
-      ),
-    };
+  const accessError = await checkUnitAccess(user, unitId);
+  if (accessError) {
+    return { user: null, errorResponse: accessError };
   }
 
   return { user, errorResponse: null };

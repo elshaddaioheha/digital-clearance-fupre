@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, readJson, errorMessage } from "@/lib/api-client";
 import { 
   GraduationCap, 
   LayoutDashboard, 
@@ -107,22 +108,17 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [showToast, setShowToast] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
-
-  const token = typeof window !== "undefined" ? localStorage.getItem("dscs_token") : null;
+  const [certificateLoading, setCertificateLoading] = useState(false);
 
   const fetchData = async () => {
     try {
-      const profileRes = await fetch("/api/students/me", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const profileData = await profileRes.json();
-      setProfile(profileData);
+      const profileRes = await apiFetch("/api/students/me");
+      const profileData = await readJson(profileRes);
+      if (profileRes.ok && profileData) setProfile(profileData);
 
-      const statusRes = await fetch("/api/clearance/my-status", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const statusData = await statusRes.json();
-      setRequests(statusData.clearanceRequests || []);
+      const statusRes = await apiFetch("/api/clearance/my-status");
+      const statusData = await readJson(statusRes);
+      setRequests(statusData?.clearanceRequests || []);
     } catch (e) {
       console.error("Error loading student dashboard details:", e);
     } finally {
@@ -131,10 +127,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   };
 
   useEffect(() => {
-    if (token) {
-      fetchData();
-    }
-  }, [token]);
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const calculateChecksum = async (file: File) => {
     const arrayBuffer = await file.arrayBuffer();
@@ -167,17 +162,16 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     formData.append("file", file);
 
     try {
-      const response = await fetch("/api/students/me/photo", {
+      const response = await apiFetch("/api/students/me/photo", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
         body: formData
       });
 
-      const data = await response.json();
-      if (response.ok) {
+      const data = await readJson(response);
+      if (response.ok && data) {
         setProfile(prev => prev ? { ...prev, profilePhotoUrl: data.profilePhotoUrl } : prev);
       } else {
-        alert(data.error || "Failed to upload photo");
+        alert(await errorMessage(response, "Failed to upload photo"));
       }
     } catch (err) {
       console.error("Photo upload error:", err);
@@ -195,19 +189,18 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     setUploadError("");
 
     const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("checksum", checksum);
+    // The submit route reads `formData.getAll("files")` and recomputes the
+    // SHA-256 itself, so the checksum shown in the UI is display-only.
+    formData.append("files", selectedFile);
 
     try {
-      const response = await fetch(`/api/clearance/${uploadingUnit.unitId}/submit`, {
+      const response = await apiFetch(`/api/clearance/${uploadingUnit.unitId}/submit`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
         body: formData
       });
 
-      const resData = await response.json();
       if (!response.ok) {
-        throw new Error(resData.error || "Failed to submit document");
+        throw new Error(await errorMessage(response, "Failed to submit document"));
       }
 
       setUploadingUnit(null);
@@ -222,11 +215,11 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     }
   };
 
+  // Mirrors the server-side gate in /api/clearance/[unitId]/submit: every
+  // earlier unit must be approved, not just the one directly before this one.
   const isRequestUnlocked = (req: ClearanceRequest) => {
     const predecessors = requests.filter(r => r.clearingUnit.sortOrder < req.clearingUnit.sortOrder);
-    if (predecessors.length === 0) return true;
-    const directPredecessor = [...predecessors].sort((a, b) => b.clearingUnit.sortOrder - a.clearingUnit.sortOrder)[0];
-    return directPredecessor.status === "APPROVED";
+    return predecessors.every(r => r.status === "APPROVED");
   };
 
   // Stats calculation
@@ -281,9 +274,39 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     }
   };
 
-  const handleDownloadCertificate = () => {
-    if (!profile) return;
-    window.open(`/api/certificates/${user.id}?token=${token}`, "_blank");
+  const handleDownloadCertificate = async () => {
+    if (!profile || certificateLoading) return;
+
+    setCertificateLoading(true);
+    try {
+      // Fetched with the Authorization header rather than opened with the token
+      // in the query string, so the access token never reaches the URL bar,
+      // browser history or the server's request log.
+      const response = await apiFetch(`/api/certificates/${user.id}`);
+
+      if (!response.ok) {
+        alert(await errorMessage(response, "Could not download your certificate"));
+        return;
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `Clearance_Certificate_${profile.matricNumber.replace(/\//g, "_")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      // Released on the next tick so the click has already been handled.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch (err) {
+      console.error("Certificate download error:", err);
+      alert("Could not download your certificate. Please try again.");
+    } finally {
+      setCertificateLoading(false);
+    }
   };
 
   const handleScrollToSection = (id: string) => {

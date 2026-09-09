@@ -8,6 +8,10 @@ import { createAuditLog } from "@/lib/audit";
 const createUnitSchema = z.object({
   name: z.string().min(2, "Unit name must be at least 2 characters long"),
   description: z.string().optional(),
+  // Position in the sequential clearance chain. Omitted means "append to the
+  // end" — the column defaults to 0, which would silently place a new unit
+  // before every seeded one and leave it ungated.
+  sortOrder: z.number().int().positive().optional(),
 });
 
 // GET /api/admin/units
@@ -16,8 +20,13 @@ export async function GET(req: Request) {
     const { user, errorResponse } = await requireRole(req, [Role.ADMIN]);
     if (errorResponse) return errorResponse;
 
+    // Ordered by position in the clearance chain, which is what the sequential
+    // gate uses — an alphabetical list would misrepresent the workflow.
     const units = await prisma.clearingUnit.findMany({
-      orderBy: { name: "asc" },
+      orderBy: { sortOrder: "asc" },
+      include: {
+        _count: { select: { assignments: true, requests: true } },
+      },
     });
 
     return NextResponse.json({ units });
@@ -51,7 +60,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, description } = parsed.data;
+    const { name, description, sortOrder } = parsed.data;
 
     // 3. Check if unit exists
     const existingUnit = await prisma.clearingUnit.findUnique({
@@ -67,10 +76,21 @@ export async function POST(req: Request) {
 
     // 4. Create unit and pre-initialize clearance requests for existing students
     const unit = await prisma.$transaction(async (tx) => {
+      let position = sortOrder;
+
+      if (position === undefined) {
+        const last = await tx.clearingUnit.findFirst({
+          orderBy: { sortOrder: "desc" },
+          select: { sortOrder: true },
+        });
+        position = (last?.sortOrder ?? 0) + 1;
+      }
+
       const newUnit = await tx.clearingUnit.create({
         data: {
           name,
           description,
+          sortOrder: position,
         },
       });
 
@@ -99,7 +119,7 @@ export async function POST(req: Request) {
       action: "CREATE_CLEARING_UNIT",
       entityType: "ClearingUnit",
       entityId: unit.id,
-      metadata: { name: unit.name },
+      metadata: { name: unit.name, sortOrder: unit.sortOrder },
     });
 
     return NextResponse.json(

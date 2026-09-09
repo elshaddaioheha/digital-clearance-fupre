@@ -59,6 +59,14 @@ export async function GET(req: Request) {
             include: {
               clearingUnit: true,
             },
+            // Clearance order is the meaningful order for every consumer of
+            // this payload: the registrar's CSV columns, the per-student
+            // breakdown, and the admin progress view.
+            orderBy: {
+              clearingUnit: {
+                sortOrder: "asc",
+              },
+            },
           },
         },
         orderBy: {
@@ -97,6 +105,7 @@ export async function GET(req: Request) {
           unitId: r.unitId,
           clearingUnit: {
             name: r.clearingUnit.name,
+            sortOrder: r.clearingUnit.sortOrder,
           },
         })),
       };

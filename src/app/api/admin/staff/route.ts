@@ -14,10 +14,12 @@ const createStaffSchema = z.object({
   assignedUnitIds: z.array(z.string()).optional(),
 });
 
-// GET /api/admin/staff - List all staff
+// GET /api/admin/staff - List all staff (admin directory)
+// Restricted to ADMIN: this returns every staff member's contact details. A
+// staff member reading their own record should use GET /api/staff/me.
 export async function GET(req: Request) {
   try {
-    const { user, errorResponse } = await requireRole(req, [Role.ADMIN, Role.STAFF]);
+    const { user, errorResponse } = await requireRole(req, [Role.ADMIN]);
     if (errorResponse) return errorResponse;
 
     const staffMembers = await prisma.staff.findMany({

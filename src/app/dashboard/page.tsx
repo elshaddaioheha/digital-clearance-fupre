@@ -6,6 +6,8 @@ import { Loader2 } from "lucide-react";
 import StudentDashboard from "@/components/StudentDashboard";
 import StaffDashboard from "@/components/StaffDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
+import RegistrarDashboard from "@/components/RegistrarDashboard";
+import { clearSession } from "@/lib/api-client";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -18,15 +20,13 @@ export default function DashboardPage() {
 
     if (!token || !storedUser) {
       // Clear storage and redirect to login if auth parameters are missing
-      localStorage.removeItem("dscs_token");
-      localStorage.removeItem("dscs_user");
+      clearSession();
       router.push("/login");
     } else {
       try {
         setUser(JSON.parse(storedUser));
       } catch (e) {
-        localStorage.removeItem("dscs_token");
-        localStorage.removeItem("dscs_user");
+        clearSession();
         router.push("/login");
       } finally {
         setLoading(false);
@@ -42,8 +42,7 @@ export default function DashboardPage() {
     } catch (e) {
       console.error("Logout endpoint failure:", e);
     } finally {
-      localStorage.removeItem("dscs_token");
-      localStorage.removeItem("dscs_user");
+      clearSession();
       router.push("/login");
       router.refresh();
     }
@@ -68,7 +67,13 @@ export default function DashboardPage() {
     return <StaffDashboard user={user} onLogout={handleLogout} />;
   }
 
-  if (user?.role === "ADMIN" || user?.role === "REGISTRAR") {
+  // The Registrar is read-only and is not authorised for the admin-only audit
+  // log endpoint, so it gets its own monitoring view rather than the admin one.
+  if (user?.role === "REGISTRAR") {
+    return <RegistrarDashboard user={user} onLogout={handleLogout} />;
+  }
+
+  if (user?.role === "ADMIN") {
     return <AdminDashboard user={user} onLogout={handleLogout} />;
   }
 
