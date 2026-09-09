@@ -52,3 +52,9 @@ dev.db*
 
 # local interface screenshots (not part of the repo)
 /public/screenshots/
+
+*.node_modules
+*.md
+*.txt
+*AGENTS.md
+*CLAUDE.md
