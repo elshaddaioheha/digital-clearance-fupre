@@ -293,8 +293,15 @@ async function main() {
     stdio: "inherit",
   });
 
-  console.log("Waiting 20 seconds for Next.js to start up...");
-  await sleep(20000);
+  // A fixed sleep is a coin flip: a cold Turbopack compile regularly needs more
+  // than 20 seconds, and the whole suite then fails with ECONNREFUSED. Poll
+  // until the server actually answers instead.
+  const ready = await waitForServer(`${APP_URL}/api/students/me`, 120000);
+  if (!ready) {
+    console.error("Dev server did not become ready in time.");
+    await stopDevServer(devServerProcess);
+    process.exit(1);
+  }
 
   let success = false;
   try {
@@ -309,6 +316,31 @@ async function main() {
   }
 
   process.exit(success ? 0 : 1);
+}
+
+/**
+ * Polls an endpoint until the server responds at all. Any HTTP status counts as
+ * ready — a 401 from an authenticated route means routing is live, which is all
+ * we need before the first test runs.
+ */
+async function waitForServer(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let reported = false;
+
+  while (Date.now() < deadline) {
+    try {
+      await makeRequest(url);
+      return true;
+    } catch (e) {
+      if (!reported) {
+        console.log("Waiting for Next.js to start up...");
+        reported = true;
+      }
+      await sleep(1000);
+    }
+  }
+
+  return false;
 }
 
 /**

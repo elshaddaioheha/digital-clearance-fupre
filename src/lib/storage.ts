@@ -22,9 +22,10 @@ export class StorageError extends Error {
 }
 
 /**
- * Returns a human-readable reason why cloud storage is unusable, or null when
- * the credentials look well-formed. This only validates shape — an authentic
- * but revoked key still fails at upload time.
+ * Returns a human-readable reason why cloud storage cannot be used at all, or
+ * null when there is something worth trying. Only missing or placeholder values
+ * disable storage — anything else is handed to Supabase, which is the real
+ * authority on whether a credential works.
  */
 function describeMisconfiguration(): string | null {
   if (!supabaseUrl || supabaseUrl === PLACEHOLDER_URL) {
@@ -35,17 +36,59 @@ function describeMisconfiguration(): string | null {
     return "SUPABASE_SERVICE_ROLE_KEY is missing or still set to the example placeholder.";
   }
 
-  // A Supabase service_role key is a JWT: three dot-separated segments. A value
-  // of any other shape produces an opaque "Invalid Compact JWS" at upload time,
-  // so it is worth catching here with a message that says what to do.
-  if (supabaseServiceKey.split(".").length !== 3) {
+  return null;
+}
+
+/**
+ * Supabase issues secrets in two shapes: the legacy service_role JWT, and the
+ * newer `sb_secret_...` API key. Both are valid, so this never blocks an
+ * upload — it only supplies a hint when a failure is likely to be caused by the
+ * wrong value being pasted (a publishable/anon key, or something truncated).
+ */
+function describeKeyFormatHint(): string | null {
+  if (!supabaseServiceKey) return null;
+
+  const looksLikeJwt = supabaseServiceKey.split(".").length === 3;
+  const looksLikeSecretKey = supabaseServiceKey.startsWith("sb_secret_");
+  const looksLikePublishableKey = supabaseServiceKey.startsWith("sb_publishable_");
+
+  if (looksLikePublishableKey) {
     return (
-      "SUPABASE_SERVICE_ROLE_KEY is not a valid JWT (expected three dot-separated " +
-      "segments). Copy the service_role key from Supabase - Project Settings - API Keys."
+      " The configured value looks like a publishable key, which cannot write to " +
+      "storage. Use the secret (service_role) key from Supabase - Project Settings - API Keys."
+    );
+  }
+
+  if (!looksLikeJwt && !looksLikeSecretKey) {
+    return (
+      " The configured key matches neither a service_role JWT nor an " +
+      "`sb_secret_...` key, so it may be truncated or mis-pasted."
     );
   }
 
   return null;
+}
+
+/**
+ * Turns a storage API error into actionable advice where the cause is known.
+ *
+ * Supabase Storage validates the credential as a JWT. Handing it one of the
+ * newer `sb_secret_...` API keys makes it fail with "Invalid Compact JWS" on
+ * every call, including a plain bucket listing — the key is well-formed, it is
+ * simply not the shape this service accepts.
+ */
+function describeUploadHint(message: string): string {
+  const looksLikeJwt = supabaseServiceKey.split(".").length === 3;
+
+  if (/JWS|JWT/i.test(message) && !looksLikeJwt) {
+    return (
+      " Supabase Storage expects a JWT credential, and the configured key is not one." +
+      " Use the legacy service_role JWT (Supabase - Project Settings - API Keys -" +
+      " legacy/JWT keys), which begins with `eyJ`, rather than an `sb_secret_...` key."
+    );
+  }
+
+  return describeKeyFormatHint() ?? "";
 }
 
 const configError = describeMisconfiguration();
@@ -87,7 +130,9 @@ export async function uploadFile(
 
       if (error) {
         throw new StorageError(
-          `Upload to Supabase Storage bucket "${BUCKET_NAME}" failed: ${error.message}`
+          `Upload to Supabase Storage bucket "${BUCKET_NAME}" failed: ${error.message}.` +
+            ` Check that the bucket exists and that the service key may write to it.` +
+            `${describeUploadHint(error.message)}`
         );
       }
 
